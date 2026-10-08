@@ -102,7 +102,7 @@ const btn =
 
 function Questoes() {
   const gen = useServerFn(generateQuestions);
-  const [materia, setMateria] = useState(MATERIAS[0]);
+  const [materia, setMateria] = useState<string>(MATERIAS[0]!);
   const [topico, setTopico] = useState("");
   const [dif, setDif] = useState("média");
   const [qtd, setQtd] = useState(5);
@@ -136,7 +136,7 @@ function Questoes() {
     if (resp[i] !== undefined) return;
     setResp({ ...resp, [i]: a });
     const s = stats[materia] ?? { certas: 0, total: 0 };
-    setStats({ ...stats, [materia]: { certas: s.certas + (a === qs[i].correta ? 1 : 0), total: s.total + 1 } });
+    setStats({ ...stats, [materia]: { certas: s.certas + (a === qs[i]!.correta ? 1 : 0), total: s.total + 1 } });
   }
 
   return (
