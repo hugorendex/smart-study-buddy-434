@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   generateQuestions,
@@ -16,6 +18,8 @@ export const Route = createFileRoute("/")({
         name: "description",
         content: "Estude para a Polícia Civil do Amapá com questões inéditas geradas por IA e cronograma personalizado.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:title", content: "Aprova PC-AP — Questões com IA" },
       {
         property: "og:description",
@@ -47,7 +51,9 @@ function useLocal<T>(key: string, initial: T) {
   const [v, setV] = useState<T>(initial);
   useEffect(() => {
     const raw = localStorage.getItem(key);
-    if (raw) setV(JSON.parse(raw));
+    if (raw) {
+      try { setV(JSON.parse(raw)); } catch { /* Ignore invalid saved data. */ }
+    }
   }, [key]);
   const set = (n: T) => {
     setV(n);
@@ -58,13 +64,18 @@ function useLocal<T>(key: string, initial: T) {
 
 function Index() {
   const [tab, setTab] = useState<"questoes" | "cronograma" | "desempenho">("questoes");
+  const [studyTopic, setStudyTopic] = useState<{ materia: string; topico: string; id: number }>();
+  function estudar(materia: string, topico: string) {
+    setStudyTopic({ materia, topico, id: Date.now() });
+    setTab("questoes");
+  }
   return (
     <div className="min-h-screen">
       <header className="bg-hero text-primary-foreground">
         <div className="mx-auto max-w-4xl px-4 pb-8 pt-8">
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">Polícia Civil do Amapá</p>
           <h1 className="mt-1 text-3xl sm:text-4xl">Aprova PC-AP</h1>
-          <p className="mt-2 max-w-lg opacity-80">Questões inéditas geradas por IA, sem repetição, e um cronograma feito para você.</p>
+          <p className="mt-2 max-w-lg opacity-80">Preparação PC-AP · Padrão Fundação Cesgranrio</p>
           <nav className="mt-6 flex gap-2 overflow-x-auto">
             {(
               [
@@ -73,7 +84,7 @@ function Index() {
                 ["desempenho", "Desempenho"],
               ] as const
             ).map(([k, l]) => (
-              <button
+              <Button
                 key={k}
                 onClick={() => setTab(k)}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -81,35 +92,45 @@ function Index() {
                 }`}
               >
                 {l}
-              </button>
+              </Button>
             ))}
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        {tab === "questoes" && <Questoes />}
-        {tab === "cronograma" && <Cronograma />}
+      <main className="mx-auto max-w-4xl px-4 py-6">
+        <div hidden={tab !== "questoes"}><Questoes studyTopic={studyTopic} /></div>
+        <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
         {tab === "desempenho" && <Desempenho />}
       </main>
     </div>
   );
 }
 
-const card = "rounded-xl border bg-card p-5 shadow-sm";
+const card = "rounded-lg border bg-card p-4 sm:p-5 shadow-sm";
 const input = "w-full rounded-md border bg-background px-3 py-2";
 const btn =
   "rounded-md bg-primary px-5 py-2.5 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
 
-function Questoes() {
+function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: string; id: number } | undefined }) {
   const gen = useServerFn(generateQuestions);
-  const [materia, setMateria] = useState<string>(MATERIAS[0]!);
+  const [materia, setMateria] = useState<string>(MATERIAS[0] ?? "Língua Portuguesa");
   const [topico, setTopico] = useState("");
   const [dif, setDif] = useState("média");
-  const [qtd, setQtd] = useState(5);
+  const [qtd, setQtd] = useState(3);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [qs, setQs] = useState<Question[]>([]);
   const [resp, setResp] = useState<Record<number, number>>({});
+  const [current, setCurrent] = useState(0);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [sessionMateria, setSessionMateria] = useState("");
+  useEffect(() => {
+    if (!studyTopic) return;
+    setMateria(studyTopic.materia);
+    setTopico(studyTopic.topico);
+    setOptionsOpen(true);
+  }, [studyTopic]);
   const [hist, setHist] = useLocal<Record<string, string[]>>("pcap-hist", {});
   const [stats, setStats] = useLocal<Stats>("pcap-stats", {});
 
@@ -122,7 +143,14 @@ function Questoes() {
       });
       const seen = new Set((hist[materia] ?? []).map((s) => s.toLowerCase()));
       const novas = res.filter((q) => !seen.has(q.enunciado.slice(0, 140).toLowerCase()));
+      if (!novas.length) {
+        setErr("Nenhuma questão nova neste bloco. Tente outro assunto ou gere novamente.");
+        return;
+      }
       setQs(novas);
+      setSessionMateria(materia);
+      setCurrent(0);
+      setFinished(false);
       setResp({});
       setHist({ ...hist, [materia]: [...(hist[materia] ?? []), ...novas.map((q) => q.enunciado.slice(0, 140))] });
     } catch (e: any) {
@@ -133,15 +161,20 @@ function Questoes() {
   }
 
   function responder(i: number, a: number) {
-    if (resp[i] !== undefined) return;
+    const question = qs[i];
+    if (!question || resp[i] !== undefined) return;
     setResp({ ...resp, [i]: a });
-    const s = stats[materia] ?? { certas: 0, total: 0 };
-    setStats({ ...stats, [materia]: { certas: s.certas + (a === qs[i]!.correta ? 1 : 0), total: s.total + 1 } });
+    const s = stats[sessionMateria] ?? { certas: 0, total: 0 };
+    setStats({ ...stats, [sessionMateria]: { certas: s.certas + (a === question.correta ? 1 : 0), total: s.total + 1 } });
   }
 
   return (
     <div className="space-y-6">
-      <div className={`${card} grid gap-4 sm:grid-cols-2`}>
+      <section className="grid gap-4 border-b pb-6 sm:grid-cols-2">
+        <div className="flex items-center justify-between sm:col-span-2">
+          <h2 className="text-xl">Praticar questões</h2>
+          <span className="text-xs font-semibold text-muted-foreground">CESGRANRIO · PC-AP</span>
+        </div>
         <label className="space-y-1 sm:col-span-2">
           <span className="text-sm font-semibold">Matéria</span>
           <select className={input} value={materia} onChange={(e) => setMateria(e.target.value)}>
@@ -150,11 +183,12 @@ function Questoes() {
             ))}
           </select>
         </label>
-        <label className="space-y-1 sm:col-span-2">
+        <Button variant="ghost" className="justify-start sm:col-span-2" aria-expanded={optionsOpen} onClick={() => setOptionsOpen(!optionsOpen)}><SlidersHorizontal />{optionsOpen ? "Ocultar ajustes" : "Assunto, dificuldade e quantidade"}</Button>
+        <label hidden={!optionsOpen} className="space-y-1 sm:col-span-2">
           <span className="text-sm font-semibold">Tópico (opcional)</span>
           <input className={input} placeholder="Ex: crimes contra a vida, crase..." value={topico} onChange={(e) => setTopico(e.target.value)} />
         </label>
-        <label className="space-y-1">
+        <label hidden={!optionsOpen} className="space-y-1">
           <span className="text-sm font-semibold">Dificuldade</span>
           <select className={input} value={dif} onChange={(e) => setDif(e.target.value)}>
             <option>fácil</option>
@@ -162,7 +196,7 @@ function Questoes() {
             <option>difícil</option>
           </select>
         </label>
-        <label className="space-y-1">
+        <label hidden={!optionsOpen} className="space-y-1">
           <span className="text-sm font-semibold">Quantidade</span>
           <select className={input} value={qtd} onChange={(e) => setQtd(+e.target.value)}>
             {[3, 5, 10].map((n) => (
@@ -170,18 +204,35 @@ function Questoes() {
             ))}
           </select>
         </label>
-        <div className="flex items-center justify-between gap-3 sm:col-span-2">
-          <span className="text-xs text-muted-foreground">{(hist[materia] ?? []).length} questões já feitas nesta matéria — nenhuma se repetirá.</span>
-          <button className={btn} onClick={gerar} disabled={loading}>
-            {loading ? "Gerando..." : "Gerar questões"}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
+          <span className="text-xs text-muted-foreground">{(hist[materia] ?? []).length} questões no histórico · Bloco de {qtd} questões</span>
+          <Button className={btn} onClick={gerar} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" /> : <BookOpen />}{loading ? "Preparando questões..." : qs.length ? "Gerar novo bloco" : "Começar a estudar"}
+          </Button>
         </div>
         {err && <p className="text-sm text-destructive sm:col-span-2">{err}</p>}
-      </div>
+      </section>
 
-      {loading && <p className="text-center text-muted-foreground">A IA está elaborando questões inéditas… isso pode levar alguns segundos.</p>}
+      {loading && <p role="status" className="text-center text-muted-foreground">Preparando {qtd} questões no padrão Cesgranrio…</p>}
+      {qs.length > 0 && !finished && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="font-semibold">{sessionMateria}</span>
+          <span className="text-muted-foreground">Questão {current + 1} de {qs.length} · {Object.keys(resp).length} respondidas</span>
+        </div>
+      )}
+      {finished && (
+        <section className="space-y-4 border-b pb-6" aria-live="polite">
+          <h2 className="flex items-center gap-2 text-xl"><CheckCircle2 className="text-success" />Bloco concluído</h2>
+          <p className="text-lg font-semibold">{qs.filter((q, i) => resp[i] === q.correta).length} acertos de {qs.length} questões</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => { setFinished(false); setCurrent(0); }}>Revisar respostas</Button>
+            <Button onClick={gerar} disabled={loading}><BookOpen />Novo bloco de {qtd}</Button>
+          </div>
+        </section>
+      )}
 
       {qs.map((q, i) => {
+        if (i !== current || finished) return null;
         const r = resp[i];
         return (
           <div key={i} className={card}>
@@ -198,10 +249,10 @@ function Questoes() {
                   else cls = "border opacity-60";
                 }
                 return (
-                  <button key={a} onClick={() => responder(i, a)} className={`flex w-full gap-3 rounded-md px-3 py-2 text-left transition ${cls}`}>
+                  <Button variant="outline" disabled={r !== undefined} key={a} onClick={() => responder(i, a)} className={`flex h-auto min-h-12 w-full items-start justify-start gap-3 whitespace-normal rounded-md px-3 py-3 text-left transition disabled:opacity-100 ${cls}`}>
                     <span className="font-bold">{"ABCDE"[a]})</span>
                     <span>{alt}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -211,6 +262,10 @@ function Questoes() {
                 <p className="mt-1">{q.explicacao}</p>
               </div>
             )}
+            <div className="mt-5 flex items-center justify-between gap-2 border-t pt-4">
+              <Button variant="ghost" onClick={() => setCurrent(current - 1)} disabled={current === 0}><ArrowLeft />Anterior</Button>
+              <Button disabled={r === undefined} onClick={() => current < qs.length - 1 ? setCurrent(current + 1) : setFinished(true)}>{current < qs.length - 1 ? "Próxima" : "Ver resultado"}<ArrowRight /></Button>
+            </div>
           </div>
         );
       })}
@@ -218,7 +273,7 @@ function Questoes() {
   );
 }
 
-function Cronograma() {
+function Cronograma({ onEstudar }: { onEstudar: (materia: string, topico: string) => void }) {
   const gen = useServerFn(generateSchedule);
   const [cargo, setCargo] = useState("Agente de Polícia");
   const [horas, setHoras] = useState(3);
@@ -277,27 +332,27 @@ function Cronograma() {
             {MATERIAS.map((m) => {
               const on = fracas.includes(m);
               return (
-                <button
+                <Button
                   key={m}
                   onClick={() => setFracas(on ? fracas.filter((f) => f !== m) : [...fracas, m])}
                   className={`rounded-full border px-3 py-1 text-sm ${on ? "border-accent bg-accent text-accent-foreground" : "bg-background"}`}
                 >
                   {m}
-                </button>
+                </Button>
               );
             })}
           </div>
         </div>
         <div className="flex justify-end sm:col-span-2">
-          <button className={btn} onClick={gerar} disabled={loading}>
+          <Button className={btn} onClick={gerar} disabled={loading}>
             {loading ? "Montando..." : plano.length ? "Gerar novo cronograma" : "Gerar cronograma"}
-          </button>
+          </Button>
         </div>
         {err && <p className="text-sm text-destructive sm:col-span-2">{err}</p>}
       </div>
 
       {plano.map((d, i) => (
-        <div key={i} className={card}>
+        <section key={i} className="border-t pt-5">
           <h3 className="text-lg">{d.dia}</h3>
           <ul className="mt-3 space-y-2">
             {d.blocos.map((b, j) => {
@@ -315,11 +370,12 @@ function Cronograma() {
                       <p className="mt-1 text-muted-foreground">{b.minutos} min</p>
                     </div>
                   </label>
+                  <Button variant="ghost" size="sm" className="mt-1" onClick={() => onEstudar(b.materia, b.topico)}><BookOpen />Praticar este assunto<ArrowRight /></Button>
                 </li>
               );
             })}
           </ul>
-        </div>
+        </section>
       ))}
     </div>
   );
