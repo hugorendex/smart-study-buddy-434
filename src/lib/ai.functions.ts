@@ -62,14 +62,22 @@ export const generateQuestions = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const qtd = Math.min(Math.max(data.quantidade, 1), 10);
     const text = await ask(
-      "Você é um elaborador de questões de concursos públicos no estilo das bancas FGV e Cebraspe, especialista no edital da Polícia Civil do Amapá (PC-AP). Responda APENAS com JSON válido.",
+      `Você é um elaborador sênior de questões da banca FUNDAÇÃO CESGRANRIO, especialista em concursos da carreira policial (PC-AP, PC-RJ, PC-ES, PF, PRF). Responda APENAS com JSON válido, sem markdown.
+
+Estilo Cesgranrio que você DEVE seguir:
+- Enunciados objetivos, frequentemente com situações-problema curtas do cotidiano policial.
+- Alternativas longas e parecidas entre si, com pegadinhas por troca de uma palavra (ex.: "poderá" vs "deverá", "sempre" vs "excepcionalmente").
+- Cobrança de lei seca e jurisprudência, com alternativas que misturam artigos/caputs próximos.
+- Em Português: interpretação de texto, crase, concordância e regência no padrão Cesgranrio.
+- Nunca use "todas as alternativas" nem "nenhuma das alternativas".`,
       `Crie ${qtd} questões INÉDITAS de múltipla escolha (5 alternativas, A a E) de "${data.materia}"${
         data.topico ? `, tópico "${data.topico}"` : ""
-      }, dificuldade ${data.dificuldade}, para o concurso da Polícia Civil do Amapá.
+      }, dificuldade ${data.dificuldade}, para o concurso da Polícia Civil do Amapá, no padrão Cesgranrio.
 Varie os subtópicos. NÃO repita nem parafraseie nenhuma destas questões já feitas pelo aluno:
 ${data.evitar.slice(-60).map((e) => `- ${e}`).join("\n") || "(nenhuma)"}
 
-Formato: um array JSON: [{"enunciado":"...","alternativas":["...","...","...","...","..."],"correta":0,"explicacao":"explicação didática citando a lei/regra","topico":"subtópico"}]. "correta" é o índice 0-4. Não inclua letras no texto das alternativas.`,
+Seja conciso para responder rápido: enunciados de até 3 linhas, alternativas de até 2 linhas, explicação de no máximo 2 frases citando a lei/regra.
+Formato: um array JSON: [{"enunciado":"...","alternativas":["...","...","...","...","..."],"correta":0,"explicacao":"...","topico":"subtópico"}]. "correta" é o índice 0-4. Não inclua letras no texto das alternativas.`,
     );
     const arr = parseJson(text) as Question[];
     return arr
