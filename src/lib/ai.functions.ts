@@ -4,7 +4,7 @@ import { z } from "zod";
 async function ask(instructions: string, prompt: string): Promise<string> {
   const { createOpenAI } = await import("@ai-sdk/openai");
   const { streamText } = await import("ai");
-  const apiKey = process.env.LOVABLE_API_KEY;
+  const apiKey = process.env['LOVABLE_API_KEY'];
   if (!apiKey) throw new Error("Chave de IA não configurada.");
   const provider = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
