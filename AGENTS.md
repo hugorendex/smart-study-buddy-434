@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep question and schedule views mounted while switching study tabs so in-progress sessions are not discarded; existing browser-local storage behavior remains unchanged.
+- Link schedule blocks to question filters through shared page state, without issuing an AI request until the student starts a batch.
