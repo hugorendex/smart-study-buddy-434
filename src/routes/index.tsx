@@ -111,7 +111,7 @@ const input = "w-full rounded-md border bg-background px-3 py-2";
 const btn =
   "rounded-md bg-primary px-5 py-2.5 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
 
-function Questoes({ studyTopic }: { studyTopic?: { materia: string; topico: string; id: number } }) {
+function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: string; id: number } | undefined }) {
   const gen = useServerFn(generateQuestions);
   const [materia, setMateria] = useState<string>(MATERIAS[0] ?? "Língua Portuguesa");
   const [topico, setTopico] = useState("");
