@@ -107,6 +107,42 @@ function Index() {
   );
 }
 
+function AudioExplicacao({ texto }: { texto: string }) {
+  const gen = useServerFn(generateExplanationAudio);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [url, setUrl] = useState("");
+
+  async function ouvir() {
+    if (url) {
+      new Audio(url).play();
+      return;
+    }
+    setLoading(true);
+    setErr("");
+    try {
+      const { audio, mime } = await gen({ data: { texto } });
+      const u = `data:${mime};base64,${audio}`;
+      setUrl(u);
+      new Audio(u).play();
+    } catch (e: any) {
+      setErr(e?.message ?? "Erro ao gerar áudio.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <Button variant="outline" size="sm" onClick={ouvir} disabled={loading}>
+        {loading ? <Loader2 className="animate-spin" /> : <Volume2 />}
+        {loading ? "Gerando áudio..." : url ? "Ouvir novamente" : "Ouvir explicação"}
+      </Button>
+      {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
+
 const card = "rounded-lg border bg-card p-4 sm:p-5 shadow-sm";
 const input = "w-full rounded-md border bg-background px-3 py-2";
 const btn =
