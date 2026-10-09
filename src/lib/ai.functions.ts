@@ -85,6 +85,36 @@ Formato: um array JSON: [{"enunciado":"...","alternativas":["...","...","...",".
       .slice(0, qtd);
   });
 
+export const generateExplanationAudio = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ texto: z.string().max(2000) }))
+  .handler(async ({ data }) => {
+    const apiKey = process.env['LOVABLE_API_KEY'];
+    if (!apiKey) throw new Error("Chave de IA não configurada.");
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-tts-preview",
+        contents: [{ role: "user", parts: [{ text: `Explique de forma clara e didática, como um professor de concursos: ${data.texto}` }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
+        },
+        stream_format: "audio",
+      }),
+    });
+    if (!res.ok) {
+      if (res.status === 429) throw new Error("Muitas solicitações. Aguarde um pouco e tente de novo.");
+      if (res.status === 402) throw new Error("Créditos de IA esgotados.");
+      throw new Error("Falha ao gerar o áudio.");
+    }
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { audio: btoa(bin), mime: res.headers.get("content-type") ?? "audio/wav" };
+  });
+
 export type ScheduleDay = { dia: string; blocos: { materia: string; topico: string; minutos: number; tipo: string }[] };
 
 export const generateSchedule = createServerFn({ method: "POST" })

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal, Volume2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   generateQuestions,
   generateSchedule,
+  generateExplanationAudio,
   type Question,
   type ScheduleDay,
 } from "@/lib/ai.functions";
@@ -102,6 +103,42 @@ function Index() {
         <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
         {tab === "desempenho" && <Desempenho />}
       </main>
+    </div>
+  );
+}
+
+function AudioExplicacao({ texto }: { texto: string }) {
+  const gen = useServerFn(generateExplanationAudio);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [url, setUrl] = useState("");
+
+  async function ouvir() {
+    if (url) {
+      new Audio(url).play();
+      return;
+    }
+    setLoading(true);
+    setErr("");
+    try {
+      const { audio, mime } = await gen({ data: { texto } });
+      const u = `data:${mime};base64,${audio}`;
+      setUrl(u);
+      new Audio(u).play();
+    } catch (e: any) {
+      setErr(e?.message ?? "Erro ao gerar áudio.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <Button variant="outline" size="sm" onClick={ouvir} disabled={loading}>
+        {loading ? <Loader2 className="animate-spin" /> : <Volume2 />}
+        {loading ? "Gerando áudio..." : url ? "Ouvir novamente" : "Ouvir explicação"}
+      </Button>
+      {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
     </div>
   );
 }
@@ -260,6 +297,7 @@ function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: strin
               <div className="mt-4 rounded-md bg-muted p-3 text-sm">
                 <p className="font-semibold">{r === q.correta ? "✔ Você acertou!" : `✘ Resposta correta: ${"ABCDE"[q.correta]}`}</p>
                 <p className="mt-1">{q.explicacao}</p>
+                <AudioExplicacao texto={`${q.enunciado} A resposta correta é a alternativa ${"ABCDE"[q.correta]}. ${q.explicacao}`} />
               </div>
             )}
             <div className="mt-5 flex items-center justify-between gap-2 border-t pt-4">
