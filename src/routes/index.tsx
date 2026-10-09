@@ -260,6 +260,7 @@ function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: strin
               <div className="mt-4 rounded-md bg-muted p-3 text-sm">
                 <p className="font-semibold">{r === q.correta ? "✔ Você acertou!" : `✘ Resposta correta: ${"ABCDE"[q.correta]}`}</p>
                 <p className="mt-1">{q.explicacao}</p>
+                <AudioExplicacao texto={`${q.enunciado} A resposta correta é a alternativa ${"ABCDE"[q.correta]}. ${q.explicacao}`} />
               </div>
             )}
             <div className="mt-5 flex items-center justify-between gap-2 border-t pt-4">
