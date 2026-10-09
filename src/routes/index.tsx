@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   generateQuestions,
   generateSchedule,
+  generateExplanationAudio,
   type Question,
   type ScheduleDay,
 } from "@/lib/ai.functions";
