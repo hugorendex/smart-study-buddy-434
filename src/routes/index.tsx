@@ -120,13 +120,22 @@ function AudioExplicacao({ texto }: { texto: string }) {
     }
     setLoading(true);
     setErr("");
+    const isHtml = (m?: string) => !!m && /<html|<script|<!doctype/i.test(m);
     try {
-      const { audio, mime } = await gen({ data: { texto } });
-      const u = `data:${mime};base64,${audio}`;
+      let res;
+      try {
+        res = await gen({ data: { texto: texto.slice(0, 2000) } });
+      } catch (e: any) {
+        if (!isHtml(e?.message) && !/fetch|network/i.test(e?.message ?? "")) throw e;
+        await new Promise((r) => setTimeout(r, 1500));
+        res = await gen({ data: { texto: texto.slice(0, 2000) } });
+      }
+      const u = `data:${res.mime};base64,${res.audio}`;
       setUrl(u);
       new Audio(u).play();
     } catch (e: any) {
-      setErr(e?.message ?? "Erro ao gerar áudio.");
+      const m = e?.message;
+      setErr(isHtml(m) || !m ? "Não foi possível gerar o áudio agora. Toque novamente para tentar." : m);
     } finally {
       setLoading(false);
     }
