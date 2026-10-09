@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal, Volume2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   generateQuestions,
