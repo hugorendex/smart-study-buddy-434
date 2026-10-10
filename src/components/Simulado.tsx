@@ -88,7 +88,7 @@ export function Simulado() {
     async function worker() {
       while (i < tarefas.length) {
         const k = i++;
-        const t = tarefas[k];
+        const t = tarefas[k]!;
         let qs: Question[] = [];
         for (let tent = 0; tent < 2 && qs.length === 0; tent++) {
           try {
@@ -193,7 +193,7 @@ export function Simulado() {
     );
   }
 
-  const q = itens[idx];
+  const q = itens[idx]!;
   const respondidas = Object.keys(resp).length;
   return (
     <div className="space-y-4">
