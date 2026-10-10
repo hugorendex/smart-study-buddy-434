@@ -80,7 +80,7 @@ export function Simulado() {
     const tarefas: { materia: string; qtd: number }[] = [];
     for (const [materia, n] of prova.materias) {
       let r = n;
-      while (r > 0) { const q = Math.min(r, 9); tarefas.push({ materia, qtd: q }); r -= q; }
+      while (r > 0) { const q = Math.min(r, 4); tarefas.push({ materia, qtd: q }); r -= q; }
     }
     const resultados: Item[][] = new Array(tarefas.length);
     let feitas = 0;
@@ -90,10 +90,10 @@ export function Simulado() {
         const k = i++;
         const t = tarefas[k]!;
         let qs: Question[] = [];
-        for (let tent = 0; tent < 2 && qs.length === 0; tent++) {
+        for (let tent = 0; tent < 4 && qs.length === 0; tent++) {
           try {
             qs = await gen({ data: { materia: t.materia, dificuldade: "nível de prova real", quantidade: t.qtd, evitar: [] } });
-          } catch { await new Promise((r) => setTimeout(r, 2000)); }
+          } catch { await new Promise((r) => setTimeout(r, 3000)); }
         }
         resultados[k] = qs.map((q) => ({ ...q, materia: t.materia }));
         feitas += t.qtd;
