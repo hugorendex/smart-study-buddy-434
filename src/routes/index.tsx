@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal, Volume2 } from "lucide-react";
+import { Simulado } from "@/components/Simulado";
 import { useServerFn } from "@tanstack/react-start";
 import {
   generateQuestions,
@@ -64,7 +65,7 @@ function useLocal<T>(key: string, initial: T) {
 }
 
 function Index() {
-  const [tab, setTab] = useState<"questoes" | "cronograma" | "desempenho">("questoes");
+  const [tab, setTab] = useState<"questoes" | "cronograma" | "desempenho" | "simulado">("questoes");
   const [studyTopic, setStudyTopic] = useState<{ materia: string; topico: string; id: number }>();
   function estudar(materia: string, topico: string) {
     setStudyTopic({ materia, topico, id: Date.now() });
@@ -83,6 +84,7 @@ function Index() {
                 ["questoes", "Questões"],
                 ["cronograma", "Cronograma"],
                 ["desempenho", "Desempenho"],
+                ["simulado", "Simulado"],
               ] as const
             ).map(([k, l]) => (
               <Button
@@ -102,6 +104,7 @@ function Index() {
         <div hidden={tab !== "questoes"}><Questoes studyTopic={studyTopic} /></div>
         <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
         {tab === "desempenho" && <Desempenho />}
+        <div hidden={tab !== "simulado"}><Simulado /></div>
       </main>
     </div>
   );
