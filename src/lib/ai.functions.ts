@@ -37,8 +37,24 @@ async function ask(instructions: string, prompt: string): Promise<string> {
 
 function parseJson(text: string) {
   const m = text.match(/[\[{][\s\S]*[\]}]/);
-  if (!m) throw new Error("Resposta inválida da IA.");
-  return JSON.parse(m[0]);
+  if (m) {
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      // resposta possivelmente truncada — tenta salvar abaixo
+    }
+  }
+  // Salva os objetos completos de um array JSON cortado no meio:
+  // fecha o array logo após o último "}" que fecha um objeto completo.
+  const start = text.indexOf("[");
+  if (start === -1) throw new Error("Resposta inválida da IA.");
+  const lastClose = text.lastIndexOf("}");
+  if (lastClose <= start) throw new Error("Resposta inválida da IA.");
+  try {
+    return JSON.parse(text.slice(start, lastClose + 1) + "]");
+  } catch {
+    throw new Error("Resposta inválida da IA.");
+  }
 }
 
 export type Question = {
