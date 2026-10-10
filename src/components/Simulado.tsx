@@ -90,12 +90,13 @@ export function Simulado() {
         const k = i++;
         const t = tarefas[k]!;
         let qs: Question[] = [];
-        for (let tent = 0; tent < 4 && qs.length === 0; tent++) {
+        for (let tent = 0; tent < 6 && qs.length === 0; tent++) {
           try {
             qs = await gen({ data: { materia: t.materia, dificuldade: "nível de prova real", quantidade: t.qtd, evitar: [] } });
           } catch (e) {
             console.error(`Falha ao gerar lote de "${t.materia}" (tentativa ${tent + 1}):`, e);
-            await new Promise((r) => setTimeout(r, 3000));
+            // Espera crescente com variação para não sobrecarregar a IA.
+            await new Promise((r) => setTimeout(r, 4000 * (tent + 1) + Math.random() * 3000));
           }
         }
         resultados[k] = qs.map((q) => ({ ...q, materia: t.materia }));
@@ -103,7 +104,7 @@ export function Simulado() {
         setProg(feitas);
       }
     }
-    await Promise.all([worker(), worker(), worker()]);
+    await Promise.all([worker(), worker()]);
     const todos = resultados.flat();
     if (todos.length < total * 0.8) {
       setErr("Não foi possível montar o simulado completo agora. Tente novamente em instantes.");
