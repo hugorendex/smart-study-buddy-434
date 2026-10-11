@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Loader2, SlidersHorizontal, Volume2 } from "lucide-react";
 import { Simulado } from "@/components/Simulado";
 import { useServerFn } from "@tanstack/react-start";
+import { AuthGate } from "@/components/AuthGate";
+import { supabase } from "@/integrations/supabase/client";
+import { getQuestions, refillBank, type BankQuestion } from "@/lib/bank.functions";
 import {
-  generateQuestions,
   generateSchedule,
   generateExplanationAudio,
-  type Question,
   type ScheduleDay,
 } from "@/lib/ai.functions";
 
@@ -101,10 +102,20 @@ function Index() {
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-6">
-        <div hidden={tab !== "questoes"}><Questoes studyTopic={studyTopic} /></div>
-        <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
-        {tab === "desempenho" && <Desempenho />}
-        <div hidden={tab !== "simulado"}><Simulado /></div>
+        <AuthGate>
+          {(session) => (
+            <>
+              <div className="mb-4 flex items-center justify-end gap-3 text-xs text-muted-foreground">
+                <span className="truncate">{session.user.email}</span>
+                <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>Sair</Button>
+              </div>
+              <div hidden={tab !== "questoes"}><Questoes studyTopic={studyTopic} /></div>
+              <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
+              {tab === "desempenho" && <Desempenho />}
+              <div hidden={tab !== "simulado"}><Simulado /></div>
+            </>
+          )}
+        </AuthGate>
       </main>
     </div>
   );
@@ -161,14 +172,15 @@ const btn =
   "rounded-md bg-primary px-5 py-2.5 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
 
 function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: string; id: number } | undefined }) {
-  const gen = useServerFn(generateQuestions);
+  const take = useServerFn(getQuestions);
+  const refill = useServerFn(refillBank);
   const [materia, setMateria] = useState<string>(MATERIAS[0] ?? "Língua Portuguesa");
   const [topico, setTopico] = useState("");
   const [dif, setDif] = useState("média");
   const [qtd, setQtd] = useState(3);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [qs, setQs] = useState<Question[]>([]);
+  const [qs, setQs] = useState<BankQuestion[]>([]);
   const [resp, setResp] = useState<Record<number, number>>({});
   const [current, setCurrent] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -187,23 +199,21 @@ function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: strin
     setLoading(true);
     setErr("");
     try {
-      const res = await gen({
-        data: { materia, topico: topico || undefined, dificuldade: dif, quantidade: qtd, evitar: hist[materia] ?? [] },
-      });
-      const seen = new Set((hist[materia] ?? []).map((s) => s.toLowerCase()));
-      const novas = res.filter((q) => !seen.has(q.enunciado.slice(0, 140).toLowerCase()));
-      if (!novas.length) {
-        setErr("Nenhuma questão nova neste bloco. Tente outro assunto ou gere novamente.");
+      const res = await take({ data: { materia, topico: topico || undefined, quantidade: qtd } });
+      if (!res.questions.length) {
+        setErr(res.error ?? "Nenhuma questão nova agora. Tente novamente.");
         return;
       }
-      setQs(novas);
+      setQs(res.questions);
       setSessionMateria(materia);
       setCurrent(0);
       setFinished(false);
       setResp({});
-      setHist({ ...hist, [materia]: [...(hist[materia] ?? []), ...novas.map((q) => q.enunciado.slice(0, 140))] });
+      setHist({ ...hist, [materia]: [...(hist[materia] ?? []), ...res.questions.map((q) => q.id)] });
+      // Prepare the next batch in the background so it opens instantly.
+      refill({ data: { materia } }).catch((e) => console.error("Falha ao reabastecer o banco:", e));
     } catch (e: any) {
-      setErr(e?.message ?? "Erro ao gerar questões.");
+      setErr(e?.message && !/<html|<script/i.test(e.message) ? e.message : "Erro ao buscar questões. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -254,9 +264,9 @@ function Questoes({ studyTopic }: { studyTopic: { materia: string; topico: strin
           </select>
         </label>
         <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
-          <span className="text-xs text-muted-foreground">{(hist[materia] ?? []).length} questões no histórico · Bloco de {qtd} questões</span>
+          <span className="text-xs text-muted-foreground">{(hist[materia] ?? []).length} questões já feitas · Bloco de {qtd} questões</span>
           <Button className={btn} onClick={gerar} disabled={loading}>
-            {loading ? <Loader2 className="animate-spin" /> : <BookOpen />}{loading ? "Preparando questões..." : qs.length ? "Gerar novo bloco" : "Começar a estudar"}
+            {loading ? <Loader2 className="animate-spin" /> : <BookOpen />}{loading ? "Preparando questões..." : qs.length ? "Novo bloco" : "Começar a estudar"}
           </Button>
         </div>
         {err && <p className="text-sm text-destructive sm:col-span-2">{err}</p>}
