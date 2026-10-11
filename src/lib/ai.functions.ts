@@ -1,61 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-
-async function ask(instructions: string, prompt: string): Promise<string> {
-  const { createOpenAI } = await import("@ai-sdk/openai");
-  const { streamText } = await import("ai");
-  const apiKey = process.env['LOVABLE_API_KEY'];
-  if (!apiKey) throw new Error("Chave de IA não configurada.");
-  const provider = createOpenAI({
-    baseURL: "https://ai.gateway.lovable.dev/v1",
-    apiKey,
-    headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-  });
-  const result = streamText({
-    model: provider.responses("openai/gpt-6-astra"),
-    system: instructions,
-    messages: [{ role: "user", content: prompt }],
-    providerOptions: {
-      openai: {
-        store: false,
-        forceReasoning: true,
-        reasoningEffort: "low",
-        reasoningSummary: "auto",
-        include: ["reasoning.encrypted_content"],
-      },
-    },
-  });
-  try {
-    return await result.text;
-  } catch (e: any) {
-    const status = e?.statusCode ?? e?.status;
-    if (status === 429) throw new Error("Muitas solicitações. Aguarde um pouco e tente de novo.");
-    if (status === 402) throw new Error("Créditos de IA esgotados.");
-    throw new Error(e?.message ?? "Falha ao gerar conteúdo.");
-  }
-}
-
-function parseJson(text: string) {
-  const m = text.match(/[\[{][\s\S]*[\]}]/);
-  if (m) {
-    try {
-      return JSON.parse(m[0]);
-    } catch {
-      // resposta possivelmente truncada — tenta salvar abaixo
-    }
-  }
-  // Salva os objetos completos de um array JSON cortado no meio:
-  // fecha o array logo após o último "}" que fecha um objeto completo.
-  const start = text.indexOf("[");
-  if (start === -1) throw new Error("Resposta inválida da IA.");
-  const lastClose = text.lastIndexOf("}");
-  if (lastClose <= start) throw new Error("Resposta inválida da IA.");
-  try {
-    return JSON.parse(text.slice(start, lastClose + 1) + "]");
-  } catch {
-    throw new Error("Resposta inválida da IA.");
-  }
-}
+import { ask, parseJson } from "./ai.server";
 
 export type Question = {
   enunciado: string;
@@ -64,42 +9,6 @@ export type Question = {
   explicacao: string;
   topico: string;
 };
-
-export const generateQuestions = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      materia: z.string(),
-      topico: z.string().optional(),
-      dificuldade: z.string(),
-      quantidade: z.number(),
-      evitar: z.array(z.string()),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const qtd = Math.min(Math.max(data.quantidade, 1), 10);
-    const text = await ask(
-      `Você é um elaborador sênior de questões da banca FUNDAÇÃO CESGRANRIO, especialista em concursos da carreira policial (PC-AP, PC-RJ, PC-ES, PF, PRF). Responda APENAS com JSON válido, sem markdown.
-
-Estilo Cesgranrio que você DEVE seguir:
-- Enunciados objetivos, frequentemente com situações-problema curtas do cotidiano policial.
-- Alternativas longas e parecidas entre si, com pegadinhas por troca de uma palavra (ex.: "poderá" vs "deverá", "sempre" vs "excepcionalmente").
-- Cobrança de lei seca e jurisprudência, com alternativas que misturam artigos/caputs próximos.
-- Em Português: interpretação de texto, crase, concordância e regência no padrão Cesgranrio.
-- Nunca use "todas as alternativas" nem "nenhuma das alternativas".`,
-      `Crie ${qtd} questões INÉDITAS de múltipla escolha (5 alternativas, A a E) de "${data.materia}"${
-        data.topico ? `, tópico "${data.topico}"` : ""
-      }, dificuldade ${data.dificuldade}, para o concurso da Polícia Civil do Amapá, no padrão Cesgranrio.
-Varie os subtópicos. NÃO repita nem parafraseie nenhuma destas questões já feitas pelo aluno:
-${data.evitar.slice(-60).map((e) => `- ${e}`).join("\n") || "(nenhuma)"}
-
-Seja conciso para responder rápido: enunciados de até 3 linhas, alternativas de até 2 linhas, explicação de no máximo 2 frases citando a lei/regra.
-Formato: um array JSON: [{"enunciado":"...","alternativas":["...","...","...","...","..."],"correta":0,"explicacao":"...","topico":"subtópico"}]. "correta" é o índice 0-4. Não inclua letras no texto das alternativas.`,
-    );
-    const arr = parseJson(text) as Question[];
-    return arr
-      .filter((q) => q?.enunciado && Array.isArray(q.alternativas) && q.alternativas.length >= 4)
-      .slice(0, qtd);
-  });
 
 export const generateExplanationAudio = createServerFn({ method: "POST" })
   .inputValidator(z.object({ texto: z.string().max(2000) }))
