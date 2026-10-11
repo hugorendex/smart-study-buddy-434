@@ -70,7 +70,7 @@ export type GenQuestion = {
 
 export async function createQuestions(opts: {
   materia: string;
-  topico?: string;
+  topico?: string | undefined;
   dificuldade: string;
   quantidade: number;
   evitar: string[];

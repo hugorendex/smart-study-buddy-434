@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Loader2, Timer } from "lucide-react";
-import { generateQuestions, type Question } from "@/lib/ai.functions";
+import { getQuestions, type BankQuestion as Question } from "@/lib/bank.functions";
 
 type Cargo = "investigador" | "delegado";
 
@@ -50,7 +50,7 @@ function fmt(s: number) {
 }
 
 export function Simulado() {
-  const gen = useServerFn(generateQuestions);
+  const gen = useServerFn(getQuestions);
   const [cargo, setCargo] = useState<Cargo>("investigador");
   const [fase, setFase] = useState<"inicio" | "gerando" | "prova" | "resultado">("inicio");
   const [itens, setItens] = useState<Item[]>([]);
@@ -84,19 +84,21 @@ export function Simulado() {
     }
     const resultados: Item[][] = new Array(tarefas.length);
     let feitas = 0;
+    let parado = false;
+    let motivo = "";
     let i = 0;
     async function worker() {
       while (i < tarefas.length) {
         const k = i++;
         const t = tarefas[k]!;
         let qs: Question[] = [];
-        for (let tent = 0; tent < 6 && qs.length === 0; tent++) {
+        if (!parado) {
           try {
-            qs = await gen({ data: { materia: t.materia, dificuldade: "nível de prova real", quantidade: t.qtd, evitar: [] } });
+            const r = await gen({ data: { materia: t.materia, quantidade: t.qtd } });
+            qs = r.questions;
+            if (r.error && !qs.length) { parado = true; motivo = r.error; }
           } catch (e) {
-            console.error(`Falha ao gerar lote de "${t.materia}" (tentativa ${tent + 1}):`, e);
-            // Espera crescente com variação para não sobrecarregar a IA.
-            await new Promise((r) => setTimeout(r, 4000 * (tent + 1) + Math.random() * 3000));
+            console.error(`Falha ao buscar "${t.materia}":`, e);
           }
         }
         resultados[k] = qs.map((q) => ({ ...q, materia: t.materia }));
@@ -107,7 +109,7 @@ export function Simulado() {
     await Promise.all([worker(), worker()]);
     const todos = resultados.flat();
     if (todos.length < total * 0.8) {
-      setErr("Não foi possível montar o simulado completo agora. Tente novamente em instantes.");
+      setErr(motivo || "Não foi possível montar o simulado completo agora. Tente novamente em instantes.");
       setFase("inicio");
       return;
     }
