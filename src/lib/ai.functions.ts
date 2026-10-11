@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { ask, parseJson } from "./ai.server";
 
 export type Question = {
   enunciado: string;
@@ -54,6 +53,7 @@ export const generateSchedule = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
+    const { ask, parseJson } = await import("./ai.server");
     const text = await ask(
       "Você é um coach de concursos policiais experiente. Responda APENAS com JSON válido.",
       `Monte um cronograma de estudos de ${Math.min(data.semanas, 4)} semana(s) para o cargo de ${data.cargo} da Polícia Civil do Amapá.
