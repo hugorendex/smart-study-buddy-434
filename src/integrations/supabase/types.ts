@@ -14,13 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_pause: {
+        Row: {
+          id: number
+          paused_until: string | null
+          reason: string | null
+        }
+        Insert: {
+          id?: number
+          paused_until?: string | null
+          reason?: string | null
+        }
+        Update: {
+          id?: number
+          paused_until?: string | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      bank_refill_locks: {
+        Row: {
+          locked_until: string
+          materia: string
+        }
+        Insert: {
+          locked_until?: string
+          materia: string
+        }
+        Update: {
+          locked_until?: string
+          materia?: string
+        }
+        Relationships: []
+      }
+      questions: {
+        Row: {
+          alternativas: Json
+          correta: number
+          created_at: string
+          enunciado: string
+          explicacao: string
+          id: string
+          materia: string
+          topico: string
+        }
+        Insert: {
+          alternativas: Json
+          correta: number
+          created_at?: string
+          enunciado: string
+          explicacao?: string
+          id?: string
+          materia: string
+          topico?: string
+        }
+        Update: {
+          alternativas?: Json
+          correta?: number
+          created_at?: string
+          enunciado?: string
+          explicacao?: string
+          id?: string
+          materia?: string
+          topico?: string
+        }
+        Relationships: []
+      }
+      user_seen_questions: {
+        Row: {
+          materia: string
+          question_id: string
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          materia: string
+          question_id: string
+          seen_at?: string
+          user_id: string
+        }
+        Update: {
+          materia?: string
+          question_id?: string
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_seen_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      count_unseen: { Args: { _materia: string }; Returns: number }
+      take_questions: {
+        Args: { _limit: number; _materia: string; _topico: string }
+        Returns: {
+          alternativas: Json
+          correta: number
+          created_at: string
+          enunciado: string
+          explicacao: string
+          id: string
+          materia: string
+          topico: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "questions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       [_ in never]: never
