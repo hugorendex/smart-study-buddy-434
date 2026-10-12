@@ -8,6 +8,20 @@
       "when": 1791677230539,
       "tag": "0000_question_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791765583056,
+      "tag": "0001_seed_lingua_logica",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791765603495,
+      "tag": "0002_seed_exatas_informatica",
+      "breakpoints": true
     }
   ]
 }
