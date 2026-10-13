@@ -115,6 +115,7 @@ export type Database = {
     }
     Functions: {
       count_unseen: { Args: { _materia: string }; Returns: number }
+      question_subjects: { Args: { _materia: string }; Returns: string[] }
       take_questions: {
         Args: { _limit: number; _materia: string; _topico: string }
         Returns: {
@@ -134,6 +135,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      take_simulado: { Args: { _cargo: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
