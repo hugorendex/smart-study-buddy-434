@@ -1,4 +1,8 @@
 # Study improvements
+- [ ] Complete initial questions for offline-from-AI study.
+- [ ] Vary correct-answer positions while preserving grading.
+- [ ] Build complete bank-only simulados without consuming questions on failure.
+- [ ] Verify authenticated question and simulado flows.
 - [x] Simplify question setup and use short default batches.
 - [x] Show one question at a time with progress and session results.
 - [x] Keep the current session when switching tabs and open schedule topics directly.

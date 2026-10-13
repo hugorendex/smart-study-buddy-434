@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Loader2, Timer } from "lucide-react";
-import { getQuestions, type BankQuestion as Question } from "@/lib/bank.functions";
+import { getSimulado, type BankQuestion as Question } from "@/lib/bank.functions";
 
 type Cargo = "investigador" | "delegado";
 
@@ -50,13 +50,12 @@ function fmt(s: number) {
 }
 
 export function Simulado() {
-  const gen = useServerFn(getQuestions);
+  const gen = useServerFn(getSimulado);
   const [cargo, setCargo] = useState<Cargo>("investigador");
   const [fase, setFase] = useState<"inicio" | "gerando" | "prova" | "resultado">("inicio");
   const [itens, setItens] = useState<Item[]>([]);
   const [resp, setResp] = useState<Record<number, number>>({});
   const [idx, setIdx] = useState(0);
-  const [prog, setProg] = useState(0);
   const [err, setErr] = useState("");
   const [restante, setRestante] = useState(DURACAO);
   const timer = useRef<ReturnType<typeof setInterval>>(undefined);
@@ -76,48 +75,22 @@ export function Simulado() {
   async function iniciar() {
     setFase("gerando");
     setErr("");
-    setProg(0);
-    const tarefas: { materia: string; qtd: number }[] = [];
-    for (const [materia, n] of prova.materias) {
-      let r = n;
-      while (r > 0) { const q = Math.min(r, 4); tarefas.push({ materia, qtd: q }); r -= q; }
-    }
-    const resultados: Item[][] = new Array(tarefas.length);
-    let feitas = 0;
-    let parado = false;
-    let motivo = "";
-    let i = 0;
-    async function worker() {
-      while (i < tarefas.length) {
-        const k = i++;
-        const t = tarefas[k]!;
-        let qs: Question[] = [];
-        if (!parado) {
-          try {
-            const r = await gen({ data: { materia: t.materia, quantidade: t.qtd } });
-            qs = r.questions;
-            if (r.error && !qs.length) { parado = true; motivo = r.error; }
-          } catch (e) {
-            console.error(`Falha ao buscar "${t.materia}":`, e);
-          }
-        }
-        resultados[k] = qs.map((q) => ({ ...q, materia: t.materia }));
-        feitas += t.qtd;
-        setProg(feitas);
+    try {
+      const result = await gen({ data: { cargo } });
+      if (result.questions.length !== total) {
+        setErr(result.error || "Ainda não há questões inéditas suficientes para um simulado completo. Você pode continuar nas questões individuais.");
+        setFase("inicio");
+        return;
       }
-    }
-    await Promise.all([worker(), worker()]);
-    const todos = resultados.flat();
-    if (todos.length < total * 0.8) {
-      setErr(motivo || "Não foi possível montar o simulado completo agora. Tente novamente em instantes.");
+      setItens(result.questions);
+      setResp({});
+      setIdx(0);
+      setRestante(DURACAO);
+      setFase("prova");
+    } catch {
+      setErr("Não foi possível buscar o simulado agora. Tente novamente.");
       setFase("inicio");
-      return;
     }
-    setItens(todos);
-    setResp({});
-    setIdx(0);
-    setRestante(DURACAO);
-    setFase("prova");
   }
 
   const card = "rounded-lg border bg-card p-4 sm:p-5 shadow-sm";
@@ -129,7 +102,7 @@ export function Simulado() {
         <p className="mt-1 text-sm text-muted-foreground">
           Mesmo formato do edital PC-AP: 80 questões, 5 alternativas, 5h30 de prova, padrão Cesgranrio.
         </p>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {(Object.keys(PROVAS) as Cargo[]).map((c) => (
             <Button key={c} variant={cargo === c ? "default" : "outline"} disabled={fase === "gerando"} onClick={() => setCargo(c)}>
               {PROVAS[c].nome}
@@ -146,9 +119,7 @@ export function Simulado() {
         {err && <p className="mt-3 text-sm text-destructive">{err}</p>}
         {fase === "gerando" ? (
           <div className="mt-4">
-            <p className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin" /> Montando o simulado… {prog}/{total} questões</p>
-            <div className="mt-2 h-2 rounded bg-muted"><div className="h-2 rounded bg-primary transition-all" style={{ width: `${(prog / total) * 100}%` }} /></div>
-            <p className="mt-2 text-xs text-muted-foreground">Isso pode levar alguns minutos. Não feche esta aba.</p>
+            <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin" /> Buscando as {total} questões do simulado…</p>
           </div>
         ) : (
           <Button className="mt-4 w-full" size="lg" onClick={iniciar}>Começar simulado</Button>
@@ -199,7 +170,8 @@ export function Simulado() {
     );
   }
 
-  const q = itens[idx]!;
+  const q = itens[idx];
+  if (!q) return null;
   const respondidas = Object.keys(resp).length;
   return (
     <div className="space-y-4">
@@ -215,13 +187,13 @@ export function Simulado() {
         <p className="mt-2 text-lg">{q.enunciado}</p>
         <div className="mt-4 space-y-2">
           {q.alternativas.map((a, k) => (
-            <button
+            <Button variant="outline"
               key={k}
               onClick={() => setResp({ ...resp, [idx]: k })}
-              className={`w-full rounded-md border px-3 py-3 text-left transition ${resp[idx] === k ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              className={`h-auto min-h-12 w-full justify-start whitespace-normal rounded-md border px-3 py-3 text-left transition ${resp[idx] === k ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
             >
               <b>{"ABCDE"[k]})</b> {a}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="mt-4 flex justify-between">
@@ -237,13 +209,13 @@ export function Simulado() {
         <p className="mb-2 text-sm font-semibold">Cartão-resposta</p>
         <div className="grid grid-cols-8 gap-1 sm:grid-cols-10">
           {itens.map((_, i) => (
-            <button
+            <Button variant="outline" size="sm"
               key={i}
               onClick={() => setIdx(i)}
               className={`rounded border py-1 text-xs ${i === idx ? "ring-2 ring-primary" : ""} ${resp[i] != null ? "bg-primary text-primary-foreground" : "bg-background"}`}
             >
               {i + 1}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

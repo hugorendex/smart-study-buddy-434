@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { shuffleQuestion } from "./question-options";
 
 export type BankQuestion = {
   id: string;
@@ -68,7 +69,7 @@ async function fillBank(materia: string, topico: string | undefined, qtd: number
 }
 
 function toDto(rows: any[]): BankQuestion[] {
-  return rows.map((r) => ({
+  return rows.map((r) => shuffleQuestion({
     id: r.id,
     materia: r.materia,
     enunciado: r.enunciado,
@@ -144,4 +145,15 @@ export const getMyStats = createServerFn({ method: "GET" })
     const counts: Record<string, number> = {};
     for (const r of data ?? []) counts[r.materia] = (counts[r.materia] ?? 0) + 1;
     return counts;
+  });
+
+/** Reserve a complete exam atomically; never call AI or consume a partial exam. */
+export const getSimulado = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ cargo: z.enum(["investigador", "delegado"]) }))
+  .handler(async ({ data, context }) => {
+    const { data: result, error } = await context.supabase.rpc("take_simulado", { _cargo: data.cargo });
+    if (error) return { questions: [] as BankQuestion[], error: "Não foi possível buscar o simulado. Tente novamente." };
+    const parsed = result as { questions?: any[]; error?: string | null } | null;
+    return { questions: toDto(parsed?.questions ?? []), error: parsed?.error ?? null };
   });

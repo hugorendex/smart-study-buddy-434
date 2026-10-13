@@ -22,6 +22,13 @@
       "when": 1791765603495,
       "tag": "0002_seed_exatas_informatica",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791852617097,
+      "tag": "0003_atomic_complete_simulados",
+      "breakpoints": true
     }
   ]
 }
