@@ -14,8 +14,9 @@ describe("Question options", () => {
   });
   it("allows the correct answer in every position, including the last", () => {
     const positions = new Set<number>();
-    for (const random of [0, 0.2, 0.45, 0.65, 0.99]) {
-      positions.add(shuffleQuestion({ alternativas: ["correct", "b", "c", "d", "e"], correta: 0 }, () => random).correta);
+    for (let choice = 0; choice < 5; choice++) {
+      let call = 0;
+      positions.add(shuffleQuestion({ alternativas: ["correct", "b", "c", "d", "e"], correta: 0 }, () => call++ === 0 ? (choice + 0.1) / 5 : 0.99).correta);
     }
     expect([...positions].sort()).toEqual([0, 1, 2, 3, 4]);
   });
