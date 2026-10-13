@@ -36,6 +36,8 @@ export const Route = createFileRoute("/")({
 const MATERIAS = [
   "Língua Portuguesa",
   "Raciocínio Lógico",
+  "Estatística e Análise de Dados",
+  "Contabilidade e Análise Financeira",
   "Informática",
   "Direito Constitucional",
   "Direito Administrativo",
@@ -46,6 +48,10 @@ const MATERIAS = [
   "Criminologia",
   "História e Geografia do Amapá",
   "Legislação Estadual (PC-AP)",
+  "Direito Civil/Empresarial e Legislação Complementar",
+  "Direito Tributário e Legislação Complementar",
+  "Direito Ambiental e Legislação Complementar",
+  "Medicina Legal",
 ];
 
 type Stats = Record<string, { certas: number; total: number }>;
