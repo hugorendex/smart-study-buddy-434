@@ -95,11 +95,11 @@ function PixPayment({ email }: { email: string }) {
             <li>Confira o valor de <strong>R$ 9,99</strong> e confirme o pagamento.</li>
             <li>Seu acesso Premium é liberado em até algumas horas após a confirmação.</li>
           </ol>
-          <div className="flex items-center gap-2">
-            <code className="max-w-full flex-1 truncate rounded-md border bg-muted px-2 py-1 text-xs">
+          <div className="flex flex-col gap-2">
+            <code className="w-full break-all rounded-md border bg-muted px-2 py-1 text-xs">
               {payload}
             </code>
-            <Button size="sm" variant="outline" onClick={copiar}>
+            <Button size="sm" variant="outline" onClick={copiar} className="self-start">
               {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               {copiado ? "Copiado!" : "Copiar"}
             </Button>
