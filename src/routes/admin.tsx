@@ -40,7 +40,7 @@ function AdminContent() {
   async function carregar() {
     setErro("");
     try {
-      setData(await getAdminOverview({ data: {} }));
+      setData(await getAdminOverview());
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar");
     }
