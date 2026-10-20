@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      pix_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          mp_payment_id: number | null
+          paid_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          mp_payment_id?: number | null
+          paid_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          mp_payment_id?: number | null
+          paid_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       questions: {
         Row: {
           alternativas: Json
