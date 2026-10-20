@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AuthGate } from "@/components/AuthGate";
-import { getAdminOverview, setUserPremium, type AdminOverview } from "@/lib/admin.functions";
-import { Loader2, Users, Crown, Clock, Activity } from "lucide-react";
+import { getAdminOverview, setUserPremium, setPremiumByEmail, type AdminOverview } from "@/lib/admin.functions";
+import { getStripeEnvironment } from "@/lib/stripe";
+import { Loader2, Users, Crown, Clock, Activity, CreditCard, UserX, Wallet } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -36,11 +38,16 @@ function AdminContent() {
   const [data, setData] = useState<AdminOverview | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState("");
+  const [email, setEmail] = useState("");
+  const [dias, setDias] = useState(30);
+  const [msg, setMsg] = useState("");
 
   async function carregar() {
     setErro("");
     try {
-      setData(await getAdminOverview());
+      let environment: "sandbox" | "live" = "sandbox";
+      try { environment = getStripeEnvironment(); } catch { /* sem pagamentos */ }
+      setData(await getAdminOverview({ data: { environment } }));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar");
     }
@@ -48,13 +55,28 @@ function AdminContent() {
 
   useEffect(() => { carregar(); }, []);
 
-  async function darPremium(userId: string, dias: number) {
+  async function darPremium(userId: string, d: number) {
     setSalvando(userId);
     try {
-      await setUserPremium({ data: { userId, dias } });
+      await setUserPremium({ data: { userId, dias: d } });
       await carregar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar");
+    }
+    setSalvando("");
+  }
+
+  async function liberarPorEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg("");
+    setSalvando("email");
+    try {
+      await setPremiumByEmail({ data: { email, dias } });
+      setMsg(`Premium liberado para ${email} por ${dias} dias.`);
+      setEmail("");
+      await carregar();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Erro ao liberar");
     }
     setSalvando("");
   }
@@ -68,11 +90,16 @@ function AdminContent() {
     );
   if (!data) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>;
 
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const cards = [
     { icon: Users, label: "Usuários cadastrados", valor: data.total },
-    { icon: Activity, label: "Ativos nos últimos 7 dias", valor: data.ativos7dias },
+    { icon: CreditCard, label: "Pagantes (assinatura)", valor: data.pagantes },
+    { icon: Crown, label: "Premium (pagos + liberados)", valor: data.premium },
+    { icon: UserX, label: "Free (inclui teste)", valor: data.free },
     { icon: Clock, label: "Em período de teste", valor: data.emTrial },
-    { icon: Crown, label: "Assinantes Premium", valor: data.premium },
+    { icon: Activity, label: "Ativos nos últimos 7 dias", valor: data.ativos7dias },
+    { icon: Wallet, label: "Receita total", valor: brl(data.receitaTotal) },
+    { icon: Wallet, label: "Receita este mês", valor: brl(data.receitaMes) },
   ];
 
   return (
@@ -86,6 +113,20 @@ function AdminContent() {
           </div>
         ))}
       </div>
+      {data.receitaErro && <p className="text-xs text-muted-foreground">{data.receitaErro}</p>}
+
+      <form onSubmit={liberarPorEmail} className="rounded-lg border bg-card p-4 space-y-3">
+        <h2 className="font-semibold">Liberar Premium por e-mail</h2>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input type="email" required placeholder="email@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1" />
+          <Input type="number" min={1} max={3650} value={dias} onChange={(e) => setDias(Number(e.target.value))} className="sm:w-28" aria-label="Dias" />
+          <Button type="submit" disabled={salvando === "email"}>
+            {salvando === "email" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Liberar"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Quantidade de dias de acesso Premium. A pessoa precisa já ter conta.</p>
+        {msg && <p className="text-sm">{msg}</p>}
+      </form>
 
       <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full text-sm">
