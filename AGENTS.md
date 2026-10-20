@@ -13,3 +13,4 @@
 - Link schedule blocks to question filters through shared page state, without issuing an AI request until the student starts a batch.
 - Shuffle alternatives once at bank delivery and remap the answer index so practice, audio and exam grading agree without mutating stored questions.
 - Reserve complete simulados in one authenticated atomic database call; share subject pools and per-user seen IDs with individual practice, and never consume questions when an exam is incomplete.
+- Premium payment is manual PIX (BR Code/EMV generated in src/lib/pix.ts from the owner's CNPJ key); access is granted by the admin via the /admin panel after confirming payment. Do not reintroduce the Stripe embedded checkout unless the user asks.
