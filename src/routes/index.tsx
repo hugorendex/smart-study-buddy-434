@@ -7,6 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { AuthGate } from "@/components/AuthGate";
 import { supabase } from "@/integrations/supabase/client";
 import { getQuestions, refillBank, type BankQuestion } from "@/lib/bank.functions";
+import { PaymentTestModeBanner, UpgradeCard } from "@/components/UpgradePlano";
 import {
   generateSchedule,
   generateExplanationAudio,
@@ -16,17 +17,17 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Aprova PC-AP — Questões com IA e cronograma" },
+      { title: "Portal do Concurseiro — Questões, simulados e cronograma" },
       {
         name: "description",
-        content: "Estude para a Polícia Civil do Amapá com questões inéditas geradas por IA e cronograma personalizado.",
+        content: "Estude para concursos com questões inéditas, simulados no formato da banca e cronograma personalizado.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { property: "og:title", content: "Aprova PC-AP — Questões com IA" },
+      { property: "og:title", content: "Portal do Concurseiro" },
       {
         property: "og:description",
-        content: "Questões inéditas e cronograma de estudos para o concurso da PC-AP.",
+        content: "Questões, simulados e cronograma de estudos para concursos públicos.",
       },
     ],
   }),
@@ -82,9 +83,9 @@ function Index() {
     <div className="min-h-screen">
       <header className="bg-hero text-primary-foreground">
         <div className="mx-auto max-w-4xl px-4 pb-8 pt-8">
-          <p className="text-sm font-semibold uppercase tracking-widest text-accent">Polícia Civil do Amapá</p>
-          <h1 className="mt-1 text-3xl sm:text-4xl">Aprova PC-AP</h1>
-          <p className="mt-2 max-w-lg opacity-80">Preparação PC-AP · Padrão Fundação Cesgranrio</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-accent">Sua aprovação começa aqui</p>
+          <h1 className="mt-1 text-3xl sm:text-4xl">Portal do Concurseiro</h1>
+          <p className="mt-2 max-w-lg opacity-80">Questões, simulados e cronograma para concursos públicos</p>
           <nav className="mt-6 flex gap-2 overflow-x-auto">
             {(
               [
