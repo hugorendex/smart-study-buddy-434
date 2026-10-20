@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
-import { Crown, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
+import { Check, Copy, Crown, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { getStripe, getStripeEnvironment } from "@/lib/stripe";
-import { createCheckoutSession } from "@/lib/payments.functions";
+import { getStripeEnvironment } from "@/lib/stripe";
+import { buildPixPayload, PIX_VALOR_PREMIUM } from "@/lib/pix";
 
 export const PRECO_PREMIUM = "premium_mensal_brl";
 
@@ -51,10 +51,77 @@ export function usePlano(userId: string | undefined) {
   return plano;
 }
 
-export function UpgradeCard({ userId }: { userId: string }) {
+function PixPayment({ email }: { email: string }) {
+  const payload = useMemo(
+    () => buildPixPayload(PIX_VALOR_PREMIUM, `PREMIUM${Date.now().toString(36).toUpperCase()}`),
+    []
+  );
+  const [qrUrl, setQrUrl] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => {
+    QRCode.toDataURL(payload, { width: 320, margin: 1 })
+      .then(setQrUrl)
+      .catch(() => setQrUrl(""));
+  }, [payload]);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {
+      /* clipboard indisponível */
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border bg-background p-4" id="pagamento-pix">
+      <p className="text-sm font-semibold flex items-center gap-2">
+        <QrCode className="h-4 w-4" /> Pague com PIX — R$ {PIX_VALOR_PREMIUM.toFixed(2).replace(".", ",")}/mês
+      </p>
+      <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+        {qrUrl ? (
+          <img src={qrUrl} alt="QR Code PIX para pagamento" className="h-48 w-48 rounded-md border bg-white p-2" />
+        ) : (
+          <div className="flex h-48 w-48 items-center justify-center rounded-md border text-xs text-muted-foreground">
+            Gerando QR Code…
+          </div>
+        )}
+        <div className="flex-1 space-y-2 text-sm">
+          <ol className="list-decimal space-y-1 pl-4 text-muted-foreground">
+            <li>Abra o app do seu banco e escolha <strong>pagar com PIX</strong>.</li>
+            <li>Aponte a câmera para o QR Code ou use o código copia e cola abaixo.</li>
+            <li>Confira o valor de <strong>R$ 9,99</strong> e confirme o pagamento.</li>
+            <li>Seu acesso Premium é liberado em até algumas horas após a confirmação.</li>
+          </ol>
+          <div className="flex items-center gap-2">
+            <code className="max-w-full flex-1 truncate rounded-md border bg-muted px-2 py-1 text-xs">
+              {payload}
+            </code>
+            <Button size="sm" variant="outline" onClick={copiar}>
+              {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copiado ? "Copiado!" : "Copiar"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Após pagar, envie o comprovante informando seu e-mail de cadastro
+            {email ? (
+              <>
+                {" "}(<strong>{email}</strong>)
+              </>
+            ) : null}{" "}
+            para agilizar a liberação do seu acesso.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function UpgradeCard({ userId, email }: { userId: string; email?: string }) {
   const plano = usePlano(userId);
-  const [checkoutAberto, setCheckoutAberto] = useState(false);
-  const [erro, setErro] = useState("");
+  const [pixAberto, setPixAberto] = useState(false);
 
   if (!plano) return null;
 
@@ -66,23 +133,12 @@ export function UpgradeCard({ userId }: { userId: string }) {
     return (
       <div className="mb-4 flex items-center gap-2 rounded-lg border bg-card p-3 text-sm">
         <Crown className="h-4 w-4 text-accent" />
-        <span>Você é <strong>Premium</strong>. Aproveite todos os recursos!</span>
+        <span>
+          Você é <strong>Premium</strong>. Aproveite todos os recursos!
+        </span>
       </div>
     );
   }
-
-  const fetchClientSecret = async (): Promise<string> => {
-    const result = await createCheckoutSession({
-      data: {
-        priceId: PRECO_PREMIUM,
-        returnUrl: window.location.href,
-        environment: getStripeEnvironment(),
-      },
-    });
-    if ("error" in result) throw new Error(result.error);
-    if (!result.clientSecret) throw new Error("Não foi possível iniciar o pagamento");
-    return result.clientSecret;
-  };
 
   return (
     <div className="mb-4 rounded-lg border bg-card p-4">
@@ -97,40 +153,14 @@ export function UpgradeCard({ userId }: { userId: string }) {
       )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button
-          onClick={() => { setErro(""); setCheckoutAberto(true); }}
+          onClick={() => setPixAberto((v) => !v)}
           className="bg-accent text-accent-foreground hover:bg-accent/90"
         >
           <Crown className="h-4 w-4" /> Assinar Premium — R$ 9,99/mês
         </Button>
-        <span className="text-xs text-muted-foreground">Pague com PIX ou cartão · cancele quando quiser</span>
+        <span className="text-xs text-muted-foreground">Pagamento via PIX · liberação após confirmação</span>
       </div>
-      {erro && <p className="mt-2 text-sm text-destructive">{erro}</p>}
-      {checkoutAberto && (
-        <div className="mt-4" id="checkout">
-          <EmbeddedCheckoutProvider stripe={getStripe()} options={{ fetchClientSecret }}>
-            <EmbeddedCheckout />
-          </EmbeddedCheckoutProvider>
-        </div>
-      )}
+      {pixAberto && <PixPayment email={email ?? ""} />}
     </div>
   );
-}
-
-export function PaymentTestModeBanner() {
-  const clientToken = import.meta.env["VITE_PAYMENTS_CLIENT_TOKEN"];
-  if (!clientToken) {
-    return (
-      <div className="w-full border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
-        O pagamento em produção ainda não está configurado.
-      </div>
-    );
-  }
-  if (clientToken.startsWith("pk_test_")) {
-    return (
-      <div className="w-full border-b border-accent/30 bg-accent/10 px-4 py-2 text-center text-xs text-foreground">
-        Pagamentos em modo de teste no preview — nenhuma cobrança real é feita.
-      </div>
-    );
-  }
-  return null;
 }
