@@ -62,7 +62,7 @@ function PixPayment({ onConfirmado }: { onConfirmado: () => void }) {
 
   useEffect(() => {
     let cancelado = false;
-    createPixPayment({ data: undefined as never })
+    createPixPayment({ data: {} as never })
       .then((p) => {
         if (!cancelado) setPagamento(p);
       })
@@ -198,7 +198,7 @@ export function UpgradeCard({ userId, email }: { userId: string; email?: string 
         </Button>
         <span className="text-xs text-muted-foreground">Pagamento via PIX · liberação após confirmação</span>
       </div>
-      {pixAberto && <PixPayment email={email ?? ""} />}
+      {pixAberto && <PixPayment onConfirmado={() => window.location.reload()} />}
     </div>
   );
 }
