@@ -1,4 +1,5 @@
 # Study improvements
+- [ ] Ampliar todas as matérias com questões inéditas e verificar gabaritos e duplicatas.
 - [ ] Complete initial questions for offline-from-AI study.
 - [ ] Vary correct-answer positions while preserving grading.
 - [ ] Build complete bank-only simulados without consuming questions on failure.
