@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
-import { Check, Copy, Crown, QrCode } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, CheckCircle2, Copy, Crown, Loader2, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
-import { buildPixPayload, PIX_VALOR_PREMIUM } from "@/lib/pix";
+import { createPixPayment, checkPixPayment, PIX_VALOR } from "@/lib/mercadopago.functions";
 
 export const PRECO_PREMIUM = "premium_mensal_brl";
 
@@ -51,23 +50,50 @@ export function usePlano(userId: string | undefined) {
   return plano;
 }
 
-function PixPayment({ email }: { email: string }) {
-  const payload = useMemo(
-    () => buildPixPayload(PIX_VALOR_PREMIUM, `PREMIUM${Date.now().toString(36).toUpperCase()}`),
-    []
-  );
-  const [qrUrl, setQrUrl] = useState("");
+function PixPayment({ onConfirmado }: { onConfirmado: () => void }) {
+  const [pagamento, setPagamento] = useState<{
+    mpPaymentId: number;
+    qrCode: string;
+    qrCodeBase64: string;
+  } | null>(null);
+  const [erro, setErro] = useState("");
   const [copiado, setCopiado] = useState(false);
+  const [confirmado, setConfirmado] = useState(false);
 
   useEffect(() => {
-    QRCode.toDataURL(payload, { width: 320, margin: 1 })
-      .then(setQrUrl)
-      .catch(() => setQrUrl(""));
-  }, [payload]);
+    let cancelado = false;
+    createPixPayment({ data: {} as never })
+      .then((p) => {
+        if (!cancelado) setPagamento(p);
+      })
+      .catch((e) => {
+        if (!cancelado) setErro(e instanceof Error ? e.message : "Não foi possível gerar o PIX.");
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pagamento || confirmado) return;
+    const timer = setInterval(async () => {
+      try {
+        const r = await checkPixPayment({ data: { mpPaymentId: pagamento.mpPaymentId } });
+        if (r.status === "approved") {
+          setConfirmado(true);
+          onConfirmado();
+        }
+      } catch {
+        /* tenta de novo no próximo ciclo */
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [pagamento, confirmado, onConfirmado]);
 
   const copiar = async () => {
+    if (!pagamento) return;
     try {
-      await navigator.clipboard.writeText(payload);
+      await navigator.clipboard.writeText(pagamento.qrCode);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     } catch {
@@ -75,17 +101,33 @@ function PixPayment({ email }: { email: string }) {
     }
   };
 
+  if (confirmado) {
+    return (
+      <div className="mt-4 flex items-center gap-2 rounded-lg border bg-background p-4 text-sm">
+        <CheckCircle2 className="h-5 w-5 text-accent" />
+        <span>
+          <strong>Pagamento confirmado!</strong> Seu acesso Premium foi liberado. Bons estudos!
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 rounded-lg border bg-background p-4" id="pagamento-pix">
       <p className="text-sm font-semibold flex items-center gap-2">
-        <QrCode className="h-4 w-4" /> Pague com PIX — R$ {PIX_VALOR_PREMIUM.toFixed(2).replace(".", ",")}/mês
+        <QrCode className="h-4 w-4" /> Pague com PIX — R$ {PIX_VALOR.toFixed(2).replace(".", ",")}/mês
       </p>
+      {erro && <p className="mt-2 text-sm text-destructive">{erro}</p>}
       <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-        {qrUrl ? (
-          <img src={qrUrl} alt="QR Code PIX para pagamento" className="h-48 w-48 rounded-md border bg-white p-2" />
+        {pagamento?.qrCodeBase64 ? (
+          <img
+            src={`data:image/png;base64,${pagamento.qrCodeBase64}`}
+            alt="QR Code PIX para pagamento"
+            className="h-48 w-48 rounded-md border bg-white p-2"
+          />
         ) : (
           <div className="flex h-48 w-48 items-center justify-center rounded-md border text-xs text-muted-foreground">
-            Gerando QR Code…
+            <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         )}
         <div className="flex-1 space-y-2 text-sm">
@@ -93,25 +135,21 @@ function PixPayment({ email }: { email: string }) {
             <li>Abra o app do seu banco e escolha <strong>pagar com PIX</strong>.</li>
             <li>Aponte a câmera para o QR Code ou use o código copia e cola abaixo.</li>
             <li>Confira o valor de <strong>R$ 9,99</strong> e confirme o pagamento.</li>
-            <li>Seu acesso Premium é liberado em até algumas horas após a confirmação.</li>
+            <li>Seu acesso Premium é liberado <strong>automaticamente</strong> em segundos.</li>
           </ol>
-          <div className="flex flex-col gap-2">
-            <code className="w-full break-all rounded-md border bg-muted px-2 py-1 text-xs">
-              {payload}
-            </code>
-            <Button size="sm" variant="outline" onClick={copiar} className="self-start">
-              {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copiado ? "Copiado!" : "Copiar"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Após pagar, envie o comprovante informando seu e-mail de cadastro
-            {email ? (
-              <>
-                {" "}(<strong>{email}</strong>)
-              </>
-            ) : null}{" "}
-            para agilizar a liberação do seu acesso.
+          {pagamento && (
+            <div className="flex flex-col gap-2">
+              <code className="w-full break-all rounded-md border bg-muted px-2 py-1 text-xs">
+                {pagamento.qrCode}
+              </code>
+              <Button size="sm" variant="outline" onClick={copiar} className="self-start">
+                {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copiado ? "Copiado!" : "Copiar"}
+              </Button>
+            </div>
+          )}
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Aguardando confirmação do pagamento…
           </p>
         </div>
       </div>
@@ -160,7 +198,7 @@ export function UpgradeCard({ userId, email }: { userId: string; email?: string 
         </Button>
         <span className="text-xs text-muted-foreground">Pagamento via PIX · liberação após confirmação</span>
       </div>
-      {pixAberto && <PixPayment email={email ?? ""} />}
+      {pixAberto && <PixPayment onConfirmado={() => window.location.reload()} />}
     </div>
   );
 }

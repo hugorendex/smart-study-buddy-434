@@ -36,6 +36,13 @@
       "when": 1792456713132,
       "tag": "0004_plans_roles_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792462155776,
+      "tag": "0005_pix_payments",
+      "breakpoints": true
     }
   ]
 }

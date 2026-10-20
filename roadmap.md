@@ -7,3 +7,5 @@
 - [x] Show one question at a time with progress and session results.
 - [x] Keep the current session when switching tabs and open schedule topics directly.
 - [x] Verify study interactions and preview errors.- [x] Add Simulado tab following the PC-AP edital.
+- [ ] PIX automático via Mercado Pago: cobrança, webhook de confirmação e liberação automática do Premium
+- [ ] Publicar o site quando o PIX automático estiver pronto
