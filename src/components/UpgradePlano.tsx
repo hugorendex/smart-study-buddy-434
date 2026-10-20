@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
-import { Check, Copy, Crown, QrCode } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, CheckCircle2, Copy, Crown, Loader2, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
-import { buildPixPayload, PIX_VALOR_PREMIUM } from "@/lib/pix";
+import { createPixPayment, checkPixPayment, PIX_VALOR } from "@/lib/mercadopago.functions";
 
 export const PRECO_PREMIUM = "premium_mensal_brl";
 
