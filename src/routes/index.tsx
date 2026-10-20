@@ -7,7 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { AuthGate } from "@/components/AuthGate";
 import { supabase } from "@/integrations/supabase/client";
 import { getQuestions, refillBank, type BankQuestion } from "@/lib/bank.functions";
-import { PaymentTestModeBanner, UpgradeCard } from "@/components/UpgradePlano";
+import { UpgradeCard } from "@/components/UpgradePlano";
 import {
   generateSchedule,
   generateExplanationAudio,
@@ -81,7 +81,6 @@ function Index() {
   }
   return (
     <div className="min-h-screen">
-      <PaymentTestModeBanner />
       <header className="bg-hero text-primary-foreground">
         <div className="mx-auto max-w-4xl px-4 pb-8 pt-8">
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">Sua aprovação começa aqui</p>
@@ -117,7 +116,7 @@ function Index() {
                 <span className="truncate">{session.user.email}</span>
                 <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>Sair</Button>
               </div>
-              <UpgradeCard userId={session.user.id} />
+              <UpgradeCard userId={session.user.id} email={session.user.email ?? ""} />
               <div hidden={tab !== "questoes"}><Questoes studyTopic={studyTopic} /></div>
               <div hidden={tab !== "cronograma"}><Cronograma onEstudar={estudar} /></div>
               {tab === "desempenho" && <Desempenho />}
