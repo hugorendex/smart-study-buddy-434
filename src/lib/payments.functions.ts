@@ -18,13 +18,13 @@ async function resolveOrCreateCustomer(
       query: `metadata['userId']:'${options.userId}'`,
       limit: 1,
     });
-    if (found.data.length) return found.data[0].id;
+    if (found.data.length) return found.data[0]!.id;
   }
   if (options.email) {
     const existing = await stripe.customers.list({ email: options.email, limit: 1 });
     if (existing.data.length) {
-      const customer = existing.data[0];
-      if (options.userId && customer.metadata?.userId !== options.userId) {
+      const customer = existing.data[0]!;
+      if (options.userId && customer.metadata?.["userId"] !== options.userId) {
         await stripe.customers.update(customer.id, {
           metadata: { ...customer.metadata, userId: options.userId },
         });
@@ -57,7 +57,10 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       const stripePrice = prices.data[0]!;
       const isRecurring = stripePrice.type === "recurring";
 
-      const customerId = await resolveOrCreateCustomer(stripe, { email, userId });
+      const customerId = await resolveOrCreateCustomer(stripe, {
+        ...(email && { email }),
+        userId,
+      });
 
       const session = await stripe.checkout.sessions.create({
         line_items: [{ price: stripePrice.id, quantity: 1 }],
