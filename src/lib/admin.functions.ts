@@ -39,7 +39,7 @@ async function calcularReceita(env: "sandbox" | "live") {
     const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
     let starting_after: string | undefined;
     for (let i = 0; i < 10; i++) {
-      const page = await stripe.invoices.list({ status: "paid", limit: 100, starting_after });
+      const page = await stripe.invoices.list({ status: "paid", limit: 100, ...(starting_after ? { starting_after } : {}) });
       for (const inv of page.data) {
         if ((inv.currency ?? "").toLowerCase() !== "brl") continue;
         const v = (inv.amount_paid ?? 0) / 100;
@@ -47,7 +47,7 @@ async function calcularReceita(env: "sandbox" | "live") {
         if (inv.created * 1000 >= inicioMes.getTime()) mes += v;
       }
       if (!page.has_more || page.data.length === 0) break;
-      starting_after = page.data[page.data.length - 1].id;
+      starting_after = page.data[page.data.length - 1]?.id;
     }
     return { total, mes, erro: null as string | null };
   } catch {
