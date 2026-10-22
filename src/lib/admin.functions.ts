@@ -92,7 +92,7 @@ export const checkUserAccess = createServerFn({ method: "POST" })
     // 2. Checa tabela authorized_emails
     try {
       const { data: authRow } = await (supabaseAdmin as any)
-        .from("authorized_emails" as any) as any
+        .from("authorized_emails" as any)
         .select("status")
         .ilike("email", email)
         .maybeSingle();
@@ -150,7 +150,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
     const authEmailMap = new Map<string, string>();
     try {
       const { data: aList } = await (supabaseAdmin as any)
-        .from("authorized_emails" as any) as any
+        .from("authorized_emails" as any)
         .select("id, email, status, created_at")
         .order("created_at", { ascending: false });
       if (aList) {
@@ -254,7 +254,7 @@ export const authorizeEmail = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     try {
-      await supabaseAdmin.from("authorized_emails" as any) as any.upsert(
+      await supabaseAdmin.from("authorized_emails" as any).upsert(
         { email: data.email, status: "approved", updated_at: new Date().toISOString() },
         { onConflict: "email" }
       );
@@ -290,7 +290,7 @@ export const revokeEmailAccess = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     try {
-      await supabaseAdmin.from("authorized_emails" as any) as any.upsert(
+      await supabaseAdmin.from("authorized_emails" as any).upsert(
         { email: data.email, status: "blocked", updated_at: new Date().toISOString() },
         { onConflict: "email" }
       );
@@ -329,7 +329,7 @@ export const toggleUserAccess = createServerFn({ method: "POST" })
     const newStatus = data.approved ? "approved" : "blocked";
 
     try {
-      await supabaseAdmin.from("authorized_emails" as any) as any.upsert(
+      await supabaseAdmin.from("authorized_emails" as any).upsert(
         { email: data.email, status: newStatus, updated_at: new Date().toISOString() },
         { onConflict: "email" }
       );
