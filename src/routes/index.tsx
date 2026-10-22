@@ -338,17 +338,6 @@ function Index() {
             ))}
           </nav>
 
-      {/* Mascote Popolo Interativo (estilo Clippy do Windows) */}
-      <PopoloMascot
-        acertosSeguidos={acertosSeguidos}
-        errosPendentes={errosPendentes}
-        modoSimulado={tab === "simulado"}
-        onEstudarMateria={(m) => estudar(m, "")}
-        onAbrirErros={() => {
-          setTab("erros");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-      />
         </div>
       </header>
 
