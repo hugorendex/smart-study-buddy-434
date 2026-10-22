@@ -7,6 +7,10 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  Bell,
+  BellRing,
+  BellOff,
+  X,
   Loader2,
   SlidersHorizontal,
   Volume2,
@@ -93,6 +97,22 @@ export type QuestaoErro = {
   resolvida?: boolean;
 };
 
+export type LembretesConfig = {
+  estudoHojeAtivo: boolean;
+  estudoHojeHorario: string; // formato "HH:mm"
+  revisaoErrosAtivo: boolean;
+  revisaoErrosHorario: string; // formato "HH:mm"
+  notificacaoNavegador: boolean;
+};
+
+export const DEFAULT_LEMBRETES: LembretesConfig = {
+  estudoHojeAtivo: true,
+  estudoHojeHorario: "09:00",
+  revisaoErrosAtivo: true,
+  revisaoErrosHorario: "19:30",
+  notificacaoNavegador: false,
+};
+
 export type PerfilAluno = {
   cargo: string;
   horasDia: number;
@@ -151,6 +171,20 @@ export function salvarErroGlobal(q: BankQuestion) {
   } catch {}
 }
 
+
+function dispararNotificacaoNativa(titulo: string, corpo: string) {
+  if (typeof window !== "undefined" && "Notification" in window) {
+    if (Notification.permission === "granted") {
+      try {
+        new Notification(titulo, {
+          body: corpo,
+          icon: "/favicon.ico",
+        });
+      } catch {}
+    }
+  }
+}
+
 type TabType = "hoje" | "questoes" | "erros" | "cronograma" | "simulado" | "desempenho";
 
 function Index() {
@@ -160,6 +194,64 @@ function Index() {
   const [erros, setErros] = useLocal<QuestaoErro[]>("pcap-erros", []);
   const [stats] = useLocal<Stats>("pcap-stats", {});
   const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
+  const [modalLembretesAberto, setModalLembretesAberto] = useState(false);
+  const [lembretes, setLembretes] = useLocal<LembretesConfig>("pcap-lembretes", DEFAULT_LEMBRETES);
+  const [alertaLembrete, setAlertaLembrete] = useState<{
+    tipo: "estudo" | "revisao";
+    titulo: string;
+    mensagem: string;
+  } | null>(null);
+
+  // Monitoramento periódico dos horários de lembrete
+  useEffect(() => {
+    function checarHorarios() {
+      const now = new Date();
+      const horaAtual = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const dataHoje = now.toISOString().split("T")[0];
+
+      // Checa lembrete de estudo do dia
+      if (lembretes.estudoHojeAtivo && lembretes.estudoHojeHorario === horaAtual) {
+        const chaveDisparo = `pcap-lembrete-estudo-${dataHoje}-${horaAtual}`;
+        if (!sessionStorage.getItem(chaveDisparo)) {
+          sessionStorage.setItem(chaveDisparo, "1");
+          setAlertaLembrete({
+            tipo: "estudo",
+            titulo: "⏰ Hora de Estudar!",
+            mensagem: "Chegou o momento do seu estudo diário. Vamos resolver um bloco de questões?",
+          });
+          if (lembretes.notificacaoNavegador) {
+            dispararNotificacaoNativa(
+              "Portal do Concurseiro - Hora de Estudar",
+              "Chegou seu horário de estudo diário! Mantenha a constância para a aprovação."
+            );
+          }
+        }
+      }
+
+      // Checa lembrete de revisões pendentes
+      if (lembretes.revisaoErrosAtivo && lembretes.revisaoErrosHorario === horaAtual && erros.length > 0) {
+        const chaveDisparo = `pcap-lembrete-revisao-${dataHoje}-${horaAtual}`;
+        if (!sessionStorage.getItem(chaveDisparo)) {
+          sessionStorage.setItem(chaveDisparo, "1");
+          setAlertaLembrete({
+            tipo: "revisao",
+            titulo: "🚨 Hora de Revisar Erros!",
+            mensagem: `Você tem ${errosPendentes} questão(ões) no Caderno de Erros aguardando revisão.`,
+          });
+          if (lembretes.notificacaoNavegador) {
+            dispararNotificacaoNativa(
+              "Portal do Concurseiro - Revisões Pendentes",
+              `Você tem ${errosPendentes} questão(ões) no Caderno de Erros para fixar hoje.`
+            );
+          }
+        }
+      }
+    }
+
+    checarHorarios();
+    const interval = setInterval(checarHorarios, 30000); // verifica a cada 30 segundos
+    return () => clearInterval(interval);
+  }, [lembretes, erros.length]);
 
   function estudar(materia: string, topico: string) {
     setStudyTopic({ materia, topico, id: Date.now() });
@@ -358,7 +450,23 @@ function Index() {
             setPerfil(novo);
             setModalPerfilAberto(false);
           }}
+          onAbrirLembretes={() => {
+            setModalPerfilAberto(false);
+            setModalLembretesAberto(true);
+          }}
           onFechar={() => setModalPerfilAberto(false)}
+        />
+      )}
+
+      {modalLembretesAberto && (
+        <ModalLembretes
+          lembretes={lembretes}
+          errosPendentes={errosPendentes}
+          onSalvar={(novos) => {
+            setLembretes(novos);
+            setModalLembretesAberto(false);
+          }}
+          onFechar={() => setModalLembretesAberto(false)}
         />
       )}
     </div>
@@ -371,17 +479,25 @@ function Index() {
 function HojeDashboard({
   perfil,
   stats,
+  lembretes,
   errosPendentes,
   onEstudar,
   onIrPara,
   onAbrirPerfil,
+  onAbrirLembretes,
+  onToggleLembreteEstudo,
+  onToggleLembreteRevisao,
 }: {
   perfil: PerfilAluno;
   stats: Stats;
+  lembretes: LembretesConfig;
   errosPendentes: number;
   onEstudar: (m: string, t: string) => void;
   onIrPara: (t: TabType) => void;
   onAbrirPerfil: () => void;
+  onAbrirLembretes: () => void;
+  onToggleLembreteEstudo: (ativo: boolean) => void;
+  onToggleLembreteRevisao: (ativo: boolean) => void;
 }) {
   const [ultimoEstudo] = useLocal<{ materia: string; timestamp: number }>("pcap-ultimo-estudo", {
     materia: "Língua Portuguesa",
@@ -1626,13 +1742,229 @@ function Desempenho({ stats, onEstudar }: { stats: Stats; onEstudar: (m: string,
 // ----------------------------------------------------
 // MODAL DE CONFIGURAÇÃO DE METAS / PERFIL
 // ----------------------------------------------------
+
+function ModalLembretes({
+  lembretes,
+  errosPendentes,
+  onSalvar,
+  onFechar,
+}: {
+  lembretes: LembretesConfig;
+  errosPendentes: number;
+  onSalvar: (novos: LembretesConfig) => void;
+  onFechar: () => void;
+}) {
+  const [estudoAtivo, setEstudoAtivo] = useState(lembretes.estudoHojeAtivo);
+  const [estudoHorario, setEstudoHorario] = useState(lembretes.estudoHojeHorario);
+  const [revisaoAtivo, setRevisaoAtivo] = useState(lembretes.revisaoErrosAtivo);
+  const [revisaoHorario, setRevisaoHorario] = useState(lembretes.revisaoErrosHorario);
+  const [notificacaoNavegador, setNotificacaoNavegador] = useState(lembretes.notificacaoNavegador);
+  const [statusPermissao, setStatusPermissao] = useState<NotificationPermission | "unsupported">(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      return Notification.permission;
+    }
+    return "unsupported";
+  });
+  const [testeDisparado, setTesteDisparado] = useState(false);
+
+  async function pedirPermissao() {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setStatusPermissao(perm);
+        if (perm === "granted") {
+          setNotificacaoNavegador(true);
+        }
+      } catch {}
+    }
+  }
+
+  function testarNotificacao() {
+    setTesteDisparado(true);
+    dispararNotificacaoNativa(
+      "🎯 Teste de Lembrete - Portal do Concurseiro",
+      "Seus lembretes estão funcionando perfeitamente! Bons estudos rumo à aprovação."
+    );
+    setTimeout(() => setTesteDisparado(false), 3000);
+  }
+
+  const inputClass = "w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg rounded-2xl border bg-card p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+        <div className="border-b pb-3 flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Bell className="h-5 w-5 text-amber-500" /> Configurar Lembretes de Estudo
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Defina os melhores horários para estudar e revisar sem esquecer sua meta diária.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onFechar} className="h-8 w-8 p-0">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Lembrete 1: Estudo do Dia */}
+          <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">1. Estudo de Hoje</span>
+                <h4 className="text-sm font-semibold text-foreground">Horário do Bloco Diário</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEstudoAtivo(!estudoAtivo)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${estudoAtivo ? "bg-primary" : "bg-muted"}`}
+                role="switch"
+                aria-checked={estudoAtivo}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${estudoAtivo ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Avisa o momento de cumprir sua meta de questões e avançar nas disciplinas do cronograma.
+            </p>
+            {estudoAtivo && (
+              <div className="flex items-center gap-3 pt-1">
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={estudoHorario}
+                  onChange={(e) => setEstudoHorario(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Lembrete 2: Revisões Pendentes */}
+          <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-500">2. Revisão de Erros</span>
+                <h4 className="text-sm font-semibold text-foreground">Horário do Caderno de Erros</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRevisaoAtivo(!revisaoAtivo)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${revisaoAtivo ? "bg-amber-500" : "bg-muted"}`}
+                role="switch"
+                aria-checked={revisaoAtivo}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${revisaoAtivo ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Lembra você de refazer questões com erros anteriores ({errosPendentes} pendentes) para fixação definitiva.
+            </p>
+            {revisaoAtivo && (
+              <div className="flex items-center gap-3 pt-1">
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={revisaoHorario}
+                  onChange={(e) => setRevisaoHorario(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Notificações do Navegador */}
+          <div className="rounded-xl border border-border/80 bg-background p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <BellRing className="h-4 w-4 text-primary" /> Notificações do Navegador
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Receba alertas na tela mesmo quando estiver em outra aba ou aplicativo.
+                </p>
+              </div>
+              {statusPermissao === "granted" ? (
+                <button
+                  type="button"
+                  onClick={() => setNotificacaoNavegador(!notificacaoNavegador)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${notificacaoNavegador ? "bg-primary" : "bg-muted"}`}
+                  role="switch"
+                  aria-checked={notificacaoNavegador}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${notificacaoNavegador ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={pedirPermissao}
+                  className="text-xs font-semibold shrink-0"
+                >
+                  Ativar Permissão
+                </Button>
+              )}
+            </div>
+
+            {statusPermissao === "granted" && (
+              <div className="pt-2 flex items-center justify-between border-t border-border/60">
+                <span className="text-xs text-emerald-500 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Permissão autorizada no navegador
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={testarNotificacao}
+                  disabled={testeDisparado}
+                  className="text-xs h-7 text-primary hover:text-primary/90 font-medium"
+                >
+                  {testeDisparado ? "Disparado!" : "Testar Alerta Agora"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t pt-4">
+          <Button variant="ghost" onClick={onFechar} className="text-xs sm:text-sm">
+            Cancelar
+          </Button>
+          <Button
+            onClick={() =>
+              onSalvar({
+                estudoHojeAtivo: estudoAtivo,
+                estudoHojeHorario: estudoHorario,
+                revisaoErrosAtivo: revisaoAtivo,
+                revisaoErrosHorario: revisaoHorario,
+                notificacaoNavegador,
+              })
+            }
+            className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm"
+          >
+            Salvar Lembretes
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalPerfil({
   perfil,
   onSalvar,
+  onAbrirLembretes,
   onFechar,
 }: {
   perfil: PerfilAluno;
   onSalvar: (p: PerfilAluno) => void;
+  onAbrirLembretes?: () => void;
   onFechar: () => void;
 }) {
   const [cargo, setCargo] = useState(perfil.cargo);
@@ -1688,6 +2020,22 @@ function ModalPerfil({
               onChange={(e) => setMetaSemanal(+e.target.value)}
             />
           </label>
+
+          {onAbrirLembretes && (
+            <div className="pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onAbrirLembretes}
+                className="w-full text-xs font-semibold justify-between border-dashed border-amber-500/40 hover:bg-amber-500/10 text-foreground"
+              >
+                <span className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-amber-500" /> Configurar Lembretes de Estudo &amp; Revisão
+                </span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </div>
+          )}
 
           <label className="block space-y-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data Estimada da Prova</span>
