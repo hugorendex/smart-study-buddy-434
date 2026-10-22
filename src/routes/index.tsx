@@ -114,12 +114,36 @@ export const DEFAULT_LEMBRETES: LembretesConfig = {
   notificacaoNavegador: false,
 };
 
+export const CONCURSOS_DISPONIVEIS = [
+  { id: "PC-AP", nome: "Polícia Civil - AP", badge: "PC-AP", cargoPadrao: "Investigador de Polícia" },
+  { id: "PF", nome: "Polícia Federal", badge: "PF", cargoPadrao: "Agente de Polícia Federal" },
+  { id: "PRF", nome: "Polícia Rodoviária Federal", badge: "PRF", cargoPadrao: "Policial Rodoviário Federal" },
+  { id: "RECEITA", nome: "Receita Federal", badge: "Receita", cargoPadrao: "Auditor-Fiscal" },
+  { id: "INSS", nome: "INSS", badge: "INSS", cargoPadrao: "Técnico do Seguro Social" },
+  { id: "TJ-AP", nome: "Tribunal de Justiça - AP", badge: "TJ-AP", cargoPadrao: "Técnico Judiciário" },
+  { id: "CNU", nome: "Concurso Nacional Unificado", badge: "CNU", cargoPadrao: "Analista em Gestão Pública" },
+  { id: "GERAL", nome: "Geral / Outros", badge: "Geral", cargoPadrao: "Carreira Pública" },
+] as const;
+
+export type OfensivaData = {
+  dias: number;
+  ultimoDia: string;
+};
+
+export type EstudosHojeData = {
+  data: string;
+  resolvidas: number;
+  certas: number;
+  tempoSegundos: number;
+};
+
 export type PerfilAluno = {
   cargo: string;
   horasDia: number;
   metaSemanal: number;
   dataProva: string;
   onboarded: boolean;
+  concurso?: string;
 };
 
 const DEFAULT_PERFIL: PerfilAluno = {
@@ -128,6 +152,7 @@ const DEFAULT_PERFIL: PerfilAluno = {
   metaSemanal: 50,
   dataProva: "2026-11-29",
   onboarded: false,
+  concurso: "PC-AP",
 };
 
 export function useLocal<T>(key: string, initial: T) {
@@ -190,7 +215,7 @@ type TabType = "hoje" | "questoes" | "erros" | "cronograma" | "simulado" | "dese
 
 function Index() {
   const [tab, setTab] = useState<TabType>("hoje");
-  const [studyTopic, setStudyTopic] = useState<{ materia: string; topico: string; id: number }>();
+  const [studyTopic, setStudyTopic] = useState<{ materia: string; topico: string; id: number; autoStart?: boolean }>();
   const [perfil, setPerfil] = useLocal<PerfilAluno>("pcap-perfil", DEFAULT_PERFIL);
   const [erros, setErros] = useLocal<QuestaoErro[]>("pcap-erros", []);
   const [stats] = useLocal<Stats>("pcap-stats", {});
@@ -204,6 +229,47 @@ function Index() {
     mensagem: string;
   } | null>(null);
 
+  const hojeStr = new Date().toISOString().slice(0, 10);
+
+  const [ofensiva, setOfensiva] = useLocal<OfensivaData>("pcap-ofensiva", {
+    dias: 0,
+    ultimoDia: "",
+  });
+
+  const [estudosHoje, setEstudosHoje] = useLocal<EstudosHojeData>("pcap-estudos-hoje", {
+    data: hojeStr,
+    resolvidas: 0,
+    certas: 0,
+    tempoSegundos: 0,
+  });
+
+  // Conta tempo apenas durante a prática, com a aba visível.
+  useEffect(() => {
+    if (tab !== "questoes") return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        setEstudosHoje((prev) => ({
+          ...prev,
+          tempoSegundos: (prev.tempoSegundos || 0) + 30,
+        }));
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [tab]);
+
+  // Reseta estatísticas diárias quando o dia virar
+  useEffect(() => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (estudosHoje.data !== hoje) {
+      setEstudosHoje({
+        data: hoje,
+        resolvidas: 0,
+        certas: 0,
+        tempoSegundos: 0,
+      });
+    }
+  }, [estudosHoje.data, setEstudosHoje]);
+
   // Monitoramento periódico dos horários de lembrete
   useEffect(() => {
     function checarHorarios() {
@@ -211,7 +277,6 @@ function Index() {
       const horaAtual = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       const dataHoje = now.toISOString().split("T")[0];
 
-      // Checa lembrete de estudo do dia
       if (lembretes.estudoHojeAtivo && lembretes.estudoHojeHorario === horaAtual) {
         const chaveDisparo = `pcap-lembrete-estudo-${dataHoje}-${horaAtual}`;
         if (!sessionStorage.getItem(chaveDisparo)) {
@@ -230,7 +295,6 @@ function Index() {
         }
       }
 
-      // Checa lembrete de revisões pendentes
       if (lembretes.revisaoErrosAtivo && lembretes.revisaoErrosHorario === horaAtual && erros.length > 0) {
         const chaveDisparo = `pcap-lembrete-revisao-${dataHoje}-${horaAtual}`;
         if (!sessionStorage.getItem(chaveDisparo)) {
@@ -251,12 +315,37 @@ function Index() {
     }
 
     checarHorarios();
-    const interval = setInterval(checarHorarios, 30000); // verifica a cada 30 segundos
+    const interval = setInterval(checarHorarios, 30000);
     return () => clearInterval(interval);
   }, [lembretes, erros.length]);
 
-  function estudar(materia: string, topico: string) {
-    setStudyTopic({ materia, topico, id: Date.now() });
+  function handleResposta(acertou: boolean) {
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    // 1. Atualiza sequência de ofensiva
+    setOfensiva((prev) => {
+      if (prev.ultimoDia === hoje) return prev;
+      const ontem = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const novosDias = prev.ultimoDia === ontem ? prev.dias + 1 : 1;
+      return { dias: novosDias, ultimoDia: hoje };
+    });
+
+    // 2. Atualiza resumo de estudos de hoje
+    setEstudosHoje((prev) => {
+      const base = prev.data === hoje ? prev : { data: hoje, resolvidas: 0, certas: 0, tempoSegundos: 0 };
+      return {
+        ...base,
+        resolvidas: base.resolvidas + 1,
+        certas: base.certas + (acertou ? 1 : 0),
+      };
+    });
+
+    // 3. Atualiza acertos seguidos
+    setAcertosSeguidos((prev) => (acertou ? prev + 1 : 0));
+  }
+
+  function estudar(materia: string, topico: string = "", autoStart: boolean = false) {
+    setStudyTopic({ materia, topico, id: Date.now(), autoStart });
     setTab("questoes");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -278,24 +367,57 @@ function Index() {
       <AccessibilityBar />
 
       <header className="bg-hero text-white border-b border-white/10 shadow-md">
-        <div className="mx-auto max-w-5xl px-4 pb-6 pt-6 sm:pb-8 sm:pt-8">
+        <div className="mx-auto max-w-5xl px-4 pb-5 pt-6 sm:pb-7 sm:pt-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-accent border border-accent/30">
-                  <Flame className="h-3.5 w-3.5" /> Preparatório PC-AP
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Seletor Rápido de Concurso */}
+                <div className="relative inline-flex items-center rounded-full bg-accent/20 px-3 py-1 text-xs font-bold text-accent border border-accent/30 shadow-sm">
+                  <span className="text-[10px] uppercase tracking-wider text-white/70 mr-1.5">Concurso:</span>
+                  <select
+                    id="select-concurso-header"
+                    aria-label="Selecionar Concurso Ativo"
+                    value={perfil.concurso || "PC-AP"}
+                    onChange={(e) => {
+                      const novo = e.target.value;
+                      const conc = CONCURSOS_DISPONIVEIS.find((c) => c.id === novo);
+                      setPerfil((prev) => ({
+                        ...prev,
+                        concurso: novo,
+                        cargo: conc?.cargoPadrao || prev.cargo,
+                      }));
+                    }}
+                    className="bg-transparent text-white font-extrabold text-xs cursor-pointer focus:outline-none pr-1"
+                  >
+                    {CONCURSOS_DISPONIVEIS.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-slate-900 text-white font-normal">
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Badge da Ofensiva Diária (Chamas) */}
+                <div
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-extrabold text-amber-300 border border-amber-500/30 shadow-sm"
+                  title="Dias consecutivos de estudo"
+                >
+                  <Flame className="h-3.5 w-3.5 fill-amber-400 text-amber-400 animate-pulse" />
+                  <span>{ofensiva.dias} {ofensiva.dias === 1 ? "dia" : "dias"} de ofensiva</span>
+                </div>
+
                 {diasRestantes != null && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-white/90">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/90">
                     <Clock className="h-3 w-3" /> Faltam {diasRestantes} dias
                   </span>
                 )}
               </div>
-              <h1 className="mt-2 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+
+              <h1 className="mt-2.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
                 Portal do Concurseiro
               </h1>
               <p className="mt-1 text-xs sm:text-sm text-white/80 max-w-xl">
-                {perfil.cargo} · Foco total em questões inéditas, simulados e revisão de erros.
+                {perfil.cargo} · Modo Foco total em questões inéditas, simulados e resolução em 1 clique.
               </p>
             </div>
 
@@ -304,7 +426,7 @@ function Index() {
                 variant="outline"
                 size="sm"
                 onClick={() => setModalPerfilAberto(true)}
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white text-xs"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white text-xs font-semibold"
               >
                 <Settings className="mr-1.5 h-3.5 w-3.5" /> Metas & Perfil
               </Button>
@@ -315,12 +437,12 @@ function Index() {
           <nav className="mt-6 hidden sm:flex items-center gap-1.5 overflow-x-auto pb-1">
             {(
               [
-                ["hoje", "Hoje", Sparkles],
-                ["questoes", "Questões", BookOpen],
+                ["hoje", "🎯 Modo Foco", Sparkles],
+                ["questoes", "Praticar", BookOpen],
                 ["erros", `Caderno de Erros ${errosPendentes > 0 ? `(${errosPendentes})` : ""}`, AlertCircle],
                 ["cronograma", "Cronograma", Calendar],
                 ["simulado", "Simulado Oficial", Award],
-                ["desempenho", "Progresso", BarChart3],
+                ["desempenho", "Evolução", BarChart3],
               ] as const
             ).map(([k, l, Icon]) => (
               <Button
@@ -328,7 +450,7 @@ function Index() {
                 onClick={() => setTab(k as TabType)}
                 className={`rounded-full px-4 py-2 text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
                   tab === k
-                    ? "bg-accent text-accent-foreground shadow-sm"
+                    ? "bg-accent text-accent-foreground shadow-sm font-bold"
                     : "bg-white/10 text-white hover:bg-white/20"
                 }`}
               >
@@ -337,7 +459,6 @@ function Index() {
               </Button>
             ))}
           </nav>
-
         </div>
       </header>
 
@@ -381,6 +502,8 @@ function Index() {
                   perfil={perfil}
                   stats={stats}
                   errosPendentes={errosPendentes}
+                  ofensiva={ofensiva}
+                  estudosHoje={estudosHoje}
                   onEstudar={estudar}
                   onIrPara={setTab}
                   onAbrirPerfil={() => setModalPerfilAberto(true)}
@@ -388,7 +511,12 @@ function Index() {
               )}
 
               <div hidden={tab !== "questoes"}>
-                <Questoes studyTopic={studyTopic} stats={stats} onIrPara={setTab} />
+                <Questoes
+                  studyTopic={studyTopic}
+                  stats={stats}
+                  onIrPara={setTab}
+                  onResposta={handleResposta}
+                />
               </div>
 
               {tab === "erros" && <CadernoErros erros={erros} setErros={setErros} onEstudar={estudar} />}
@@ -412,12 +540,12 @@ function Index() {
       >
         {(
           [
-            ["hoje", "Hoje", Sparkles],
-            ["questoes", "Questões", BookOpen],
+            ["hoje", "Foco", Sparkles],
+            ["questoes", "Praticar", BookOpen],
             ["erros", "Erros", AlertCircle],
             ["cronograma", "Plano", Calendar],
             ["simulado", "Simulado", Award],
-            ["desempenho", "Progresso", BarChart3],
+            ["desempenho", "Evolução", BarChart3],
           ] as const
         ).map(([k, l, Icon]) => {
           const ativo = tab === k;
@@ -445,7 +573,7 @@ function Index() {
         })}
       </nav>
 
-      {/* Mascote Popólo Interativo (estilo Clippy do Windows) */}
+      {/* Mascote Popólo Interativo */}
       <PopoloMascot
         acertosSeguidos={acertosSeguidos}
         errosPendentes={errosPendentes}
@@ -453,7 +581,7 @@ function Index() {
         dataProva={perfil.dataProva}
         cargoDesejado={perfil.cargo}
         modoSimulado={tab === "simulado"}
-        onEstudarMateria={(m) => estudar(m, "")}
+        onEstudarMateria={(m) => estudar(m, "", true)}
         onAbrirErros={() => {
           setTab("erros");
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -490,32 +618,27 @@ function Index() {
     </div>
   );
 }
-
 // ----------------------------------------------------
 // TELA "HOJE" — DASHBOARD ORIENTADO À AÇÃO
 // ----------------------------------------------------
 function HojeDashboard({
   perfil,
   stats,
-  lembretes,
   errosPendentes,
+  ofensiva,
+  estudosHoje,
   onEstudar,
   onIrPara,
   onAbrirPerfil,
-  onAbrirLembretes,
-  onToggleLembreteEstudo,
-  onToggleLembreteRevisao,
 }: {
   perfil: PerfilAluno;
   stats: Stats;
-  lembretes: LembretesConfig;
   errosPendentes: number;
-  onEstudar: (m: string, t: string) => void;
+  ofensiva: OfensivaData;
+  estudosHoje: EstudosHojeData;
+  onEstudar: (m: string, t: string, autoStart?: boolean) => void;
   onIrPara: (t: TabType) => void;
   onAbrirPerfil: () => void;
-  onAbrirLembretes: () => void;
-  onToggleLembreteEstudo: (ativo: boolean) => void;
-  onToggleLembreteRevisao: (ativo: boolean) => void;
 }) {
   const [ultimoEstudo] = useLocal<{ materia: string; timestamp: number }>("pcap-ultimo-estudo", {
     materia: "Língua Portuguesa",
@@ -525,161 +648,165 @@ function HojeDashboard({
   const [plano] = useLocal<ScheduleDay[]>("pcap-plano", []);
   const [feitos] = useLocal<Record<string, boolean>>("pcap-feitos", {});
 
-  // Total de questões feitas no portal
-  const totalQuestoesFeitas = useMemo(() => {
-    return Object.values(hist).reduce((acc, curr) => acc + curr.length, 0);
-  }, [hist]);
+  const totalQuestoesFeitas = useMemo(
+    () => Object.values(hist).reduce((acc, curr) => acc + curr.length, 0),
+    [hist]
+  );
 
-  // Taxa global de acertos
-  const taxaGlobal = useMemo(() => {
-    let certas = 0;
-    let total = 0;
-    for (const s of Object.values(stats)) {
-      certas += s.certas;
-      total += s.total;
-    }
-    return total > 0 ? Math.round((certas / total) * 100) : 0;
-  }, [stats]);
-
-  // Matéria mais fraca (com menor % de acertos e pelo menos 1 questão respondida)
   const materiaMaisFraca = useMemo(() => {
     const arr = Object.entries(stats).filter(([, s]) => s.total >= 2);
-    if (!arr.length) return MATERIAS[0];
+    if (!arr.length) return "Língua Portuguesa";
     arr.sort((a, b) => a[1].certas / a[1].total - b[1].certas / b[1].total);
     return arr[0][0];
   }, [stats]);
 
-  // Próxima tarefa do cronograma
   const proximaTarefaCronograma = useMemo(() => {
     if (!plano.length) return null;
     for (let d = 0; d < plano.length; d++) {
       const dia = plano[d];
       for (let b = 0; b < dia.blocos.length; b++) {
         const k = `${d}-${b}`;
-        if (!feitos[k]) {
-          return {
-            dia: dia.dia,
-            bloco: dia.blocos[b],
-          };
-        }
+        if (!feitos[k]) return { dia: dia.dia, bloco: dia.blocos[b] };
       }
     }
     return null;
   }, [plano, feitos]);
 
-  // Progresso da meta semanal
+  const acertoHoje = estudosHoje.resolvidas > 0
+    ? Math.round((estudosHoje.certas / estudosHoje.resolvidas) * 100)
+    : 0;
+  const minutosHoje = Math.floor((estudosHoje.tempoSegundos || 0) / 60);
   const progressoMeta = Math.min(Math.round((totalQuestoesFeitas / perfil.metaSemanal) * 100), 100);
 
   const card = "rounded-xl border bg-card p-4 sm:p-5 shadow-sm";
+  const concursoNome = CONCURSOS_DISPONIVEIS.find((c) => c.id === (perfil.concurso || "PC-AP"))?.nome || "Seu concurso";
 
   return (
-    <div className="space-y-6">
-      {/* Hero Card: Continue de onde parou */}
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Welcome Modo Foco */}
       <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/5 to-background p-5 sm:p-7 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-          <div className="space-y-2">
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="space-y-2 max-w-xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/20 px-3 py-1 text-xs font-bold text-primary uppercase tracking-wide">
-              <Zap className="h-3.5 w-3.5" /> Continue de onde parou
+              <Zap className="h-3.5 w-3.5" /> Modo Foco · {concursoNome}
             </span>
-            <h2 className="text-xl sm:text-2xl font-black text-foreground">
-              {ultimoEstudo.materia}
-            </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-lg">
-              Pronto para bater sua meta de hoje? Resolva um bloco rápido no padrão Cesgranrio e mantenha a consistência.
+            <h2 className="text-xl sm:text-2xl font-black text-foreground">Pronto para avançar hoje?</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {ultimoEstudo.materia} · Continue seu ritmo e transforme pequenos blocos em progresso consistente.
             </p>
           </div>
 
-          <div className="flex w-full sm:w-auto items-center gap-3">
+          <div className="flex w-full sm:w-auto flex-col gap-2">
             <Button
               size="lg"
               className="w-full sm:w-auto font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground gap-2 py-6 px-6 text-base"
-              onClick={() => onEstudar(ultimoEstudo.materia, "")}
+              onClick={() => onEstudar(ultimoEstudo.materia, "", true)}
             >
-              <Play className="h-5 w-5 fill-current" /> Continuar Praticando
+              <Play className="h-5 w-5 fill-current" /> Praticar Agora
             </Button>
+            {proximaTarefaCronograma && (
+              <p className="text-[11px] text-muted-foreground text-center sm:text-right">
+                Próximo no plano: {proximaTarefaCronograma.bloco.materia}
+              </p>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Grid com Metas Semanais e Métricas */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        {/* Card Meta Semanal */}
-        <div className={`${card} sm:col-span-2 flex flex-col justify-between`}>
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-accent" />
-                <h3 className="font-bold text-sm">Meta Semanal de Questões</h3>
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground">
-                {totalQuestoesFeitas} de {perfil.metaSemanal} feitas
-              </span>
-            </div>
-            <div className="mt-3 h-3 w-full rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-500"
-                style={{ width: `${progressoMeta}%` }}
-              />
-            </div>
+      {/* Métricas enxutas do dia */}
+      <section className="grid grid-cols-3 gap-2.5 sm:gap-4" aria-label="Resumo do dia">
+        <div className={`${card} p-3 sm:p-5`}>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+            <span className="text-[10px] sm:text-xs font-semibold">Resolvidas hoje</span>
           </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
-            <span>
-              {progressoMeta >= 100
-                ? "🎉 Meta semanal batida! Parabéns pela disciplina."
-                : `Faltam ${Math.max(perfil.metaSemanal - totalQuestoesFeitas, 0)} questões para fechar a meta.`}
-            </span>
-            <button
-              type="button"
-              onClick={onAbrirPerfil}
-              className="text-primary hover:underline font-semibold"
-            >
-              Ajustar meta
-            </button>
-          </div>
+          <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{estudosHoje.resolvidas}</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">Meta semanal: {progressoMeta}%</p>
         </div>
 
-        {/* Card Desempenho Global */}
-        <div className={card}>
-          <div className="flex items-center gap-2">
+        <div className={`${card} p-3 sm:p-5`}>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <TrendingUp className="h-4 w-4 text-emerald-500" />
-            <h3 className="font-bold text-sm">Taxa de Acertos</h3>
+            <span className="text-[10px] sm:text-xs font-semibold">Acerto hoje</span>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-foreground">{taxaGlobal}%</span>
-            <span className="text-xs text-muted-foreground">global</span>
+          <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{acertoHoje}%</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">{estudosHoje.certas} corretas</p>
+        </div>
+
+        <div className={`${card} p-3 sm:p-5`}>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="h-4 w-4 text-amber-500" />
+            <span className="text-[10px] sm:text-xs font-semibold">Tempo focado</span>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {taxaGlobal >= 70
-              ? "Excelente! Você está na zona de pontuação competitiva."
-              : "Continue resolvendo questões para elevar sua média."}
-          </p>
+          <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{minutosHoje}<span className="text-sm">m</span></p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">Tempo com portal visível</p>
         </div>
       </section>
 
-      {/* Trilhas de Ação Rápida */}
+      {/* Streak e meta semanal */}
+      <section className="grid gap-4 sm:grid-cols-3">
+        <div className={`${card} sm:col-span-2`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-accent" />
+              <h3 className="font-bold text-sm">Meta semanal de questões</h3>
+            </div>
+            <span className="text-xs font-semibold text-muted-foreground">{totalQuestoesFeitas} / {perfil.metaSemanal}</span>
+          </div>
+          <div className="mt-3 h-2.5 w-full rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${progressoMeta}%` }} />
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{progressoMeta >= 100 ? "🎉 Meta semanal concluída!" : `Faltam ${Math.max(perfil.metaSemanal - totalQuestoesFeitas, 0)} questões`}</span>
+            <button type="button" onClick={onAbrirPerfil} className="text-primary hover:underline font-semibold">Ajustar</button>
+          </div>
+        </div>
+
+        <div className={`${card} flex items-center gap-3 bg-amber-500/5 border-amber-500/20`}>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500/15">
+            <Flame className="h-6 w-6 fill-amber-500 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-black text-foreground">{ofensiva.dias} {ofensiva.dias === 1 ? "dia" : "dias"}</p>
+            <p className="text-xs text-muted-foreground">na sua ofensiva de estudos</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Ações rápidas personalizadas */}
       <section className="space-y-3">
-        <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" /> Escolha sua sessão de estudos de agora
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-accent" /> O que estudar agora
+          </h3>
+          <span className="hidden sm:inline text-xs text-muted-foreground">Escolha e comece sem configurar filtros</span>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {/* Ação 1: Matéria do Cronograma */}
+          <button
+            type="button"
+            onClick={() => onEstudar(ultimoEstudo.materia, "", true)}
+            className="group flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 shadow-sm"
+          >
+            <div className="space-y-1">
+              <span className="inline-block rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">▶ Continuar</span>
+              <p className="font-bold text-foreground text-sm group-hover:text-primary">{ultimoEstudo.materia}</p>
+              <p className="text-xs text-muted-foreground">Retome seu último bloco de estudos.</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary shrink-0 mt-1" />
+          </button>
+
           {proximaTarefaCronograma ? (
             <button
               type="button"
-              onClick={() => onEstudar(proximaTarefaCronograma.bloco.materia, proximaTarefaCronograma.bloco.topico)}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 cursor-pointer shadow-sm group"
+              onClick={() => onEstudar(proximaTarefaCronograma.bloco.materia, proximaTarefaCronograma.bloco.topico, true)}
+              className="group flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 shadow-sm"
             >
               <div className="space-y-1">
-                <span className="inline-block rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                  {proximaTarefaCronograma.dia} · Cronograma
-                </span>
-                <p className="font-bold text-foreground text-sm group-hover:text-primary transition">
-                  {proximaTarefaCronograma.bloco.materia}
-                </p>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {proximaTarefaCronograma.bloco.topico}
-                </p>
+                <span className="inline-block rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">📅 {proximaTarefaCronograma.dia} · Cronograma</span>
+                <p className="font-bold text-foreground text-sm group-hover:text-primary">{proximaTarefaCronograma.bloco.materia}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{proximaTarefaCronograma.bloco.topico || "Questões da matéria do dia"}</p>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary shrink-0 mt-1" />
             </button>
@@ -687,81 +814,67 @@ function HojeDashboard({
             <button
               type="button"
               onClick={() => onIrPara("cronograma")}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 cursor-pointer shadow-sm group"
+              className="group flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 shadow-sm"
             >
               <div className="space-y-1">
-                <span className="inline-block rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                  Cronograma
-                </span>
-                <p className="font-bold text-foreground text-sm group-hover:text-primary transition">
-                  Gerar novo cronograma semanal
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Monte um plano sob medida para suas horas e cargo.
-                </p>
+                <span className="inline-block rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">📅 Cronograma</span>
+                <p className="font-bold text-foreground text-sm group-hover:text-primary">Montar plano semanal</p>
+                <p className="text-xs text-muted-foreground">Organize suas matérias e horários.</p>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary shrink-0 mt-1" />
             </button>
           )}
 
-          {/* Ação 2: Treinar Matéria Mais Fraca */}
           <button
             type="button"
-            onClick={() => onEstudar(materiaMaisFraca, "")}
-            className="flex items-start justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-left transition hover:border-amber-500 hover:bg-amber-500/10 cursor-pointer shadow-sm group"
+            onClick={() => onEstudar(materiaMaisFraca, "", true)}
+            className="group flex items-start justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-left transition hover:border-amber-500 hover:bg-amber-500/10 shadow-sm"
           >
             <div className="space-y-1">
-              <span className="inline-block rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                🎯 Reforço Recomendado
-              </span>
-              <p className="font-bold text-foreground text-sm group-hover:text-amber-600 transition">
-                Treinar {materiaMaisFraca}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Eleve sua taxa nessa disciplina para não perder pontos decisivos.
-              </p>
+              <span className="inline-block rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">🎯 Reforço recomendado</span>
+              <p className="font-bold text-foreground text-sm group-hover:text-amber-600">Treinar {materiaMaisFraca}</p>
+              <p className="text-xs text-muted-foreground">Priorize a disciplina com menor aproveitamento registrado.</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-amber-500 shrink-0 mt-1" />
           </button>
 
-          {/* Ação 3: Caderno de Erros */}
           <button
             type="button"
             onClick={() => onIrPara("erros")}
-            className="flex items-start justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-left transition hover:border-destructive hover:bg-destructive/10 cursor-pointer shadow-sm group"
+            className="group flex items-start justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-left transition hover:border-destructive hover:bg-destructive/10 shadow-sm"
           >
             <div className="space-y-1">
-              <span className="inline-block rounded-md bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">
-                🚨 Caderno de Erros
-              </span>
-              <p className="font-bold text-foreground text-sm group-hover:text-destructive transition">
-                Revisar {errosPendentes} {errosPendentes === 1 ? "questão errada" : "questões erradas"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Refaça até acertar e garanta que não errará de novo.
-              </p>
+              <span className="inline-block rounded-md bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">🚨 Caderno de erros</span>
+              <p className="font-bold text-foreground text-sm group-hover:text-destructive">Revisar {errosPendentes} {errosPendentes === 1 ? "questão" : "questões"}</p>
+              <p className="text-xs text-muted-foreground">Reforce os pontos que ainda precisam de atenção.</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-destructive shrink-0 mt-1" />
           </button>
 
-          {/* Ação 4: Simulado Oficial */}
           <button
             type="button"
             onClick={() => onIrPara("simulado")}
-            className="flex items-start justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-left transition hover:border-emerald-500 hover:bg-emerald-500/10 cursor-pointer shadow-sm group"
+            className="group flex items-start justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-left transition hover:border-emerald-500 hover:bg-emerald-500/10 shadow-sm"
           >
             <div className="space-y-1">
-              <span className="inline-block rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                🏆 Simulado da Prova
-              </span>
-              <p className="font-bold text-foreground text-sm group-hover:text-emerald-600 transition">
-                Simulado de 80 Questões
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Treine com cronômetro de 5h30 e cartão-resposta oficial.
-              </p>
+              <span className="inline-block rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">🏆 Simulado</span>
+              <p className="font-bold text-foreground text-sm group-hover:text-emerald-600">Treinar em modo prova</p>
+              <p className="text-xs text-muted-foreground">Pratique gestão de tempo e estratégia.</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-emerald-500 shrink-0 mt-1" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onIrPara("desempenho")}
+            className="group flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-muted/50 shadow-sm"
+          >
+            <div className="space-y-1">
+              <span className="inline-block rounded-md bg-violet-500/10 px-2 py-0.5 text-[11px] font-bold text-violet-600 dark:text-violet-400">📊 Evolução</span>
+              <p className="font-bold text-foreground text-sm group-hover:text-primary">Ver meu progresso</p>
+              <p className="text-xs text-muted-foreground">Acompanhe seu desempenho por disciplina.</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary shrink-0 mt-1" />
           </button>
         </div>
       </section>
@@ -1003,10 +1116,12 @@ function Questoes({
   studyTopic,
   stats,
   onIrPara,
+  onResposta,
 }: {
-  studyTopic: { materia: string; topico: string; id: number } | undefined;
+  studyTopic: { materia: string; topico: string; id: number; autoStart?: boolean } | undefined;
   stats: Stats;
   onIrPara: (t: TabType) => void;
+  onResposta: (acertou: boolean) => void;
 }) {
   const take = useServerFn(getQuestions);
   const refill = useServerFn(refillBank);
@@ -1034,15 +1149,21 @@ function Questoes({
     if (!studyTopic) return;
     setMateria(studyTopic.materia);
     setTopico(studyTopic.topico);
-    setOptionsOpen(true);
-  }, [studyTopic]);
+    if (studyTopic.autoStart) {
+      setOptionsOpen(false);
+      void gerar(studyTopic.materia, studyTopic.topico);
+    } else {
+      setOptionsOpen(true);
+    }
+  }, [studyTopic?.id]);
 
-  async function gerar(materiaEscolhida?: string) {
+  async function gerar(materiaEscolhida?: string, topicoEscolhido?: string) {
     const mat = materiaEscolhida || materia;
+    const topicoParaBusca = topicoEscolhido ?? topico;
     setLoading(true);
     setErr("");
     try {
-      const res = await take({ data: { materia: mat, topico: topico || undefined, quantidade: qtd } });
+      const res = await take({ data: { materia: mat, topico: topicoParaBusca || undefined, quantidade: qtd } });
       if (!res.questions.length) {
         setErr(res.error ?? "Nenhuma questão nova agora. Tente novamente.");
         return;
@@ -1071,7 +1192,7 @@ function Questoes({
     setResp((prev) => ({ ...prev, [i]: a }));
 
     const acertou = a === question.correta;
-    onResposta?.(acertou);
+    onResposta(acertou);
 
     // Se errou, salva automaticamente no caderno de erros
     if (!acertou) {
@@ -1089,6 +1210,26 @@ function Questoes({
       };
     });
   }
+
+  useEffect(() => {
+    if (qs.length === 0 || finished || current < 0 || current >= qs.length) return;
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) return;
+      const key = event.key.toUpperCase();
+      if ("ABCDE".includes(key) && key.length === 1) {
+        event.preventDefault();
+        responder(current, "ABCDE".indexOf(key));
+      } else if (event.key === "Enter" && resp[current] !== undefined) {
+        event.preventDefault();
+        if (current < qs.length - 1) setCurrent((n) => n + 1);
+        else setFinished(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [qs, current, resp, finished]);
 
   function refazerErrosBloco() {
     const erradas = qs.filter((q, i) => resp[i] !== q.correta);
@@ -1251,7 +1392,7 @@ function Questoes({
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm bg-muted/60 px-4 py-2.5 rounded-lg border">
           <span className="font-bold text-foreground">{sessionMateria}</span>
           <span className="text-muted-foreground">
-            Questão {current + 1} de {qs.length} · {Object.keys(resp).length} respondidas
+            Questão {current + 1} de {qs.length} · {Object.keys(resp).length} respondidas · A–E responde · Enter avança
           </span>
         </div>
       )}
