@@ -185,4 +185,16 @@ export const getMyStats = createServerFn({ method: "GET" })
 export const getSimulado = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ cargo: z.enum(["investigador", "delegado"]) }))
+  .handler(async ({ data, context }) => {
+    await assertUserAuthorized(context.supabase, context.userId, context.claims?.email);
+    const { data: result, error } = await context.supabase.rpc("take_simulado", { _cargo: data.cargo });
+    if (error) {
+      console.error("take_simulado failed", error);
+      return { questions: [] as (BankQuestion & { materia: string })[], error: "Não foi possível montar o simulado agora. Tente novamente." };
+    }
+    const r = (result ?? {}) as { questions?: any[]; error?: string | null };
+    const questions = toDto(r.questions ?? []);
+    return { questions, error: (r.error ?? null) as string | null };
+  });
+
   
