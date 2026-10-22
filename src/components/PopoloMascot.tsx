@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { safeStorage } from "@/lib/safe-storage";
+import { calcularDiasRestantes } from "@/lib/concursos";
 import { Shield, Volume2, VolumeX } from "lucide-react";
 
 export type PopoloMood = "normal" | "feliz" | "pensativo" | "atento" | "dormindo" | "comemorando";
@@ -290,16 +291,12 @@ export function PopoloMascot({
     return "Comece sua ofensiva hoje mesmo! Pratique um bloco rápido de questões e construa sua rotina de aprovação.";
   }, [ofensiva?.dias, estudosHoje?.resolvidas, estudosHoje?.certas]);
 
-  // Contagem regressiva de dias para a prova do concurso
+  // Contagem regressiva de dias para a prova do concurso calculada com segurança de fuso
   const gerarDicaContagemDias = useCallback(() => {
-    if (!dataProva) {
+    const diffDias = calcularDiasRestantes(dataProva);
+    if (diffDias == null) {
       return "Defina a data da sua prova no seu perfil para eu acompanhar sua contagem regressiva diária até o dia da posse!";
     }
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const alvo = new Date(dataProva + "T00:00:00");
-    const diffDias = Math.ceil((alvo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDias > 1) {
       return `Faltam apenas ${diffDias} dias para a sua prova do concurso! Mantenha a constância diária, cada questão resolvida hoje conta muito!`;

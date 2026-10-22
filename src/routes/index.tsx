@@ -1,4 +1,18 @@
 import { AccessibilityBar } from "@/components/AccessibilityBar";
+import {
+  MATERIAS,
+  MATERIAS_POR_CONCURSO,
+  obterMateriasPorConcurso,
+  CONCURSOS_DISPONIVEIS,
+  calcularDiasRestantes,
+} from "@/lib/concursos";
+export {
+  MATERIAS,
+  MATERIAS_POR_CONCURSO,
+  obterMateriasPorConcurso,
+  CONCURSOS_DISPONIVEIS,
+  calcularDiasRestantes,
+} from "@/lib/concursos";
 import { safeStorage, safeSession } from "@/lib/safe-storage";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
@@ -64,95 +78,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-export const MATERIAS = [
-  "Língua Portuguesa",
-  "Raciocínio Lógico",
-  "Estatística e Análise de Dados",
-  "Contabilidade e Análise Financeira",
-  "Informática",
-  "Direito Constitucional",
-  "Direito Administrativo",
-  "Direito Penal",
-  "Direito Processual Penal",
-  "Legislação Penal Especial",
-  "Direitos Humanos",
-  "Criminologia",
-  "História e Geografia do Amapá",
-  "Legislação Estadual (PC-AP)",
-  "Direito Civil/Empresarial e Legislação Complementar",
-  "Direito Tributário e Legislação Complementar",
-  "Direito Ambiental e Legislação Complementar",
-  "Medicina Legal",
-];
-
-export const MATERIAS_POR_CONCURSO: Record<string, string[]> = {
-  "PC-AP": MATERIAS,
-  "PF": [
-    "Língua Portuguesa",
-    "Informática",
-    "Contabilidade e Análise Financeira",
-    "Raciocínio Lógico",
-    "Estatística e Análise de Dados",
-    "Direito Constitucional",
-    "Direito Administrativo",
-    "Direito Penal",
-    "Direito Processual Penal",
-    "Legislação Penal Especial",
-    "Direitos Humanos",
-  ],
-  "PRF": [
-    "Língua Portuguesa",
-    "Raciocínio Lógico",
-    "Informática",
-    "Direito Constitucional",
-    "Direito Administrativo",
-    "Direito Penal",
-    "Direito Processual Penal",
-    "Legislação Penal Especial",
-    "Direitos Humanos",
-  ],
-  "RECEITA": [
-    "Língua Portuguesa",
-    "Raciocínio Lógico",
-    "Estatística e Análise de Dados",
-    "Contabilidade e Análise Financeira",
-    "Direito Constitucional",
-    "Direito Administrativo",
-    "Direito Tributário e Legislação Complementar",
-  ],
-  "INSS": [
-    "Língua Portuguesa",
-    "Raciocínio Lógico",
-    "Informática",
-    "Direito Constitucional",
-    "Direito Administrativo",
-  ],
-  "TJ-AP": [
-    "Língua Portuguesa",
-    "Raciocínio Lógico",
-    "Informática",
-    "Direito Constitucional",
-    "Direito Administrativo",
-    "Direito Processual Penal",
-    "História e Geografia do Amapá",
-    "Legislação Estadual (PC-AP)",
-  ],
-  "CNU": [
-    "Língua Portuguesa",
-    "Raciocínio Lógico",
-    "Estatística e Análise de Dados",
-    "Informática",
-    "Direito Constitucional",
-    "Direito Administrativo",
-    "Direitos Humanos",
-  ],
-  "GERAL": MATERIAS,
-};
-
-export function obterMateriasPorConcurso(concurso?: string): string[] {
-  if (!concurso) return MATERIAS;
-  return MATERIAS_POR_CONCURSO[concurso] || MATERIAS;
-}
+// Constantes de concursos e matérias movidas para @/lib/concursos
 
 export type Stats = Record<string, { certas: number; total: number }>;
 
@@ -184,16 +110,7 @@ export const DEFAULT_LEMBRETES: LembretesConfig = {
   notificacaoNavegador: false,
 };
 
-export const CONCURSOS_DISPONIVEIS = [
-  { id: "PC-AP", nome: "Polícia Civil - AP", badge: "PC-AP", cargoPadrao: "Investigador de Polícia" },
-  { id: "PF", nome: "Polícia Federal", badge: "PF", cargoPadrao: "Agente de Polícia Federal" },
-  { id: "PRF", nome: "Polícia Rodoviária Federal", badge: "PRF", cargoPadrao: "Policial Rodoviário Federal" },
-  { id: "RECEITA", nome: "Receita Federal", badge: "Receita", cargoPadrao: "Auditor-Fiscal" },
-  { id: "INSS", nome: "INSS", badge: "INSS", cargoPadrao: "Técnico do Seguro Social" },
-  { id: "TJ-AP", nome: "Tribunal de Justiça - AP", badge: "TJ-AP", cargoPadrao: "Técnico Judiciário" },
-  { id: "CNU", nome: "Concurso Nacional Unificado", badge: "CNU", cargoPadrao: "Analista em Gestão Pública" },
-  { id: "GERAL", nome: "Geral / Outros", badge: "Geral", cargoPadrao: "Carreira Pública" },
-] as const;
+// CONCURSOS_DISPONIVEIS importado de @/lib/concursos
 
 export type OfensivaData = {
   dias: number;
@@ -430,14 +347,13 @@ function Index() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Contagem regressiva para a prova
-  const diasRestantes = useMemo(() => {
-    if (!perfil.dataProva) return null;
-    const target = new Date(perfil.dataProva + "T00:00:00");
-    const now = new Date();
-    const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  }, [perfil.dataProva]);
+  // Contagem regressiva para a prova calculada e sincronizada com segurança no cliente
+  const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
+
+  useEffect(() => {
+    const diff = calcularDiasRestantes(perfil?.dataProva);
+    setDiasRestantes(diff != null ? (diff > 0 ? diff : 0) : null);
+  }, [perfil?.dataProva]);
 
   // Contagem de erros pendentes
   const errosPendentes = useMemo(() => erros.filter((e) => !e.resolvida).length, [erros]);

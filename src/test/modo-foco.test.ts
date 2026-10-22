@@ -109,3 +109,29 @@ describe("Armazenamento seguro (safeStorage / safeSession)", () => {
     expect(safeSession.getItem("sessao-inexistente")).toBeNull();
   });
 });
+
+describe("Cálculo seguro de dias restantes (calcularDiasRestantes)", () => {
+  it("calcula dias restantes com segurança de calendário e fuso horário", async () => {
+    const { calcularDiasRestantes } = await import("@/lib/concursos");
+
+    expect(calcularDiasRestantes(undefined)).toBeNull();
+    expect(calcularDiasRestantes("")).toBeNull();
+    expect(calcularDiasRestantes("invalido")).toBeNull();
+
+    // Data de hoje
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const hojeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    expect(calcularDiasRestantes(hojeStr)).toBe(0);
+
+    // Data daqui a 5 dias
+    const daqui5 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 5);
+    const daqui5Str = `${daqui5.getFullYear()}-${pad(daqui5.getMonth() + 1)}-${pad(daqui5.getDate())}`;
+    expect(calcularDiasRestantes(daqui5Str)).toBe(5);
+
+    // Data passada
+    const ontem = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2);
+    const ontemStr = `${ontem.getFullYear()}-${pad(ontem.getMonth() + 1)}-${pad(ontem.getDate())}`;
+    expect(calcularDiasRestantes(ontemStr)).toBeLessThan(0);
+  });
+});
