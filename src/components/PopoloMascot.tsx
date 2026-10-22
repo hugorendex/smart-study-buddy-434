@@ -44,7 +44,7 @@ const DICAS_GERAIS = [
 function limparTextoParaFala(texto: string): string {
   return texto
     .replace(/[🤖⭐🔥★^💡🎯✓✕""]/g, "")
-    .replace(/\bPC-AP\b/g, "Polícia Civil do Amapá")
+    .replace(/\bPC-AP\b/g, "Polícia Civil do Amapá").replace(/\bpopolo\b/gi, "Popólo")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -113,7 +113,7 @@ export function PopoloMascot({
     if (falaCustomizada) return falaCustomizada;
     if (modoSimulado) return "Estou em Modo Foco acompanhando seu Simulado. Força na prova!";
     if (errosPendentes > 5) {
-      return `Aviso do Popolo: Você tem ${errosPendentes} erros no Caderno de Erros. Vale a pena revisar antes de dormir!`;
+      return `Aviso do Popólo: Você tem ${errosPendentes} erros no Caderno de Erros. Vale a pena revisar antes de dormir!`;
     }
     return DICAS_GERAIS[dicaIndex % DICAS_GERAIS.length];
   }, [falaCustomizada, modoSimulado, errosPendentes, dicaIndex]);
@@ -290,7 +290,7 @@ export function PopoloMascot({
         utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
       } catch (e) {
-        console.warn("Erro ao sintetizar voz do Popolo:", e);
+        console.warn("Erro ao sintetizar voz do Popólo:", e);
         if (legendaAtiva) {
           iniciarLegendaSilenciosa(tokens);
         } else {
@@ -390,12 +390,14 @@ export function PopoloMascot({
 
   function interagirComPopolo() {
     const frasesCrianca = [
-      "Oi! Eu sou o Popolo! Sabia que quem estuda todo dia passa na prova rapidinho?",
+      "Oi! Eu sou o Popólo! Sabia que quem estuda todo dia passa na prova rapidinho?",
       "Olha só meu distintivo de policial mirim! Ele brilha quando você acerta!",
       "Força aí! Não desiste que o distintivo da PC-AP tá te esperando!",
       "Eba! Que questão legal, vamos acertar essa juntos?",
       "Tô torcendo muito por você! Foco total nas questões!",
-      "Bip bop! Minha bateria tá 100% cheia pra te ajudar a passar!",
+      "Bip bop! A bateria do Popólo tá 100% cheia pra te ajudar a passar!",
+      "O Popólo tá aqui torcendo muito pela sua posse na PC-AP!",
+      "Força nos estudos! Com o Popólo do seu lado, a aprovação vem mais rápido!",
     ];
     const novaFrase = frasesCrianca[brincadeiraContador % frasesCrianca.length];
     setBrincadeiraContador((prev) => prev + 1);
@@ -412,7 +414,7 @@ export function PopoloMascot({
   // Se o aluno minimizou totalmente
   if (minimizado) {
     return (
-      <aside aria-label="Popolo assistente minimizado" className="fixed bottom-20 sm:bottom-6 right-4 z-40">
+      <aside aria-label="Popólo assistente minimizado" className="fixed bottom-24 sm:bottom-20 right-5 z-50">
         <button
           type="button"
           onClick={() => {
@@ -423,7 +425,7 @@ export function PopoloMascot({
             }
           }}
           className="group relative flex items-center gap-2 rounded-full border-2 border-accent bg-card px-3 py-2 shadow-xl hover:scale-105 transition-all duration-300"
-          title="Clique para chamar o Popolo"
+          title="Clique para chamar o Popólo"
         >
           {/* Avatar mini */}
           <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-inner">
@@ -442,7 +444,7 @@ export function PopoloMascot({
             )}
           </div>
           <span className="text-xs font-bold text-foreground group-hover:text-accent transition-colors">
-            Popolo
+            Popólo
           </span>
           <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
@@ -451,7 +453,7 @@ export function PopoloMascot({
   }
 
   return (
-    <aside aria-label="Popolo assistente" className="fixed bottom-20 sm:bottom-6 right-4 z-40 flex flex-col items-end pointer-events-none select-none">
+    <aside aria-label="Popólo assistente" className="fixed bottom-24 sm:bottom-20 right-5 z-50 flex flex-col items-end pointer-events-none select-none">
       {/* Balão de Fala estilo Clippy do Windows com Legenda Sincronizada */}
       {balaoAberto && (
         <div className="pointer-events-auto mb-2 max-w-[290px] sm:max-w-[340px] rounded-2xl border-2 border-accent/40 bg-card/95 backdrop-blur-md p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-300 relative text-foreground">
@@ -464,7 +466,7 @@ export function PopoloMascot({
               <span className="flex h-5 w-5 items-center justify-center rounded bg-accent/20 text-accent text-xs font-bold">
                 ⭐
               </span>
-              <span className="text-xs font-bold text-accent">Popolo</span>
+              <span className="text-xs font-bold text-accent">Popólo</span>
               
               {/* Seletor de voz infantil */}
               <button
@@ -533,7 +535,7 @@ export function PopoloMascot({
                   setMinimizado(true);
                 }}
                 className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
-                title="Minimizar Popolo"
+                title="Minimizar Popólo"
               >
                 <Minimize2 className="h-3 w-3" />
               </button>
@@ -727,14 +729,14 @@ export function PopoloMascot({
           {/* Distintivo / Corpo miniatura estilo distintivo policial */}
           <div className="-mt-1 flex items-center justify-center">
             <div className={`flex items-center gap-1 rounded-full border ${falando ? "border-amber-400 bg-amber-950/90" : "border-accent bg-slate-900/90"} px-2 py-0.5 shadow-md transition-colors`}>
-              <span className="text-[9px] font-black text-accent uppercase">Popolo</span>
+              <span className="text-[9px] font-black text-accent uppercase">Popólo</span>
             </div>
           </div>
         </div>
 
         {/* Efeito tooltip ao passar o mouse */}
         <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 right-0 bg-popover text-popover-foreground text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border">
-          {falando ? "Falando com legenda sincronizada..." : "Clique para falar com o Popolo! 🎈"}
+          {falando ? "Falando com legenda sincronizada..." : "Clique para falar com o Popólo! 🎈"}
         </div>
       </div>
     </aside>

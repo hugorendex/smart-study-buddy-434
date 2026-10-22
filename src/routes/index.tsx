@@ -445,7 +445,7 @@ function Index() {
         })}
       </nav>
 
-      {/* Mascote Popolo Interativo (estilo Clippy do Windows) */}
+      {/* Mascote Popólo Interativo (estilo Clippy do Windows) */}
       <PopoloMascot
         acertosSeguidos={acertosSeguidos}
         errosPendentes={errosPendentes}
