@@ -42,12 +42,12 @@ export const Route = createFileRoute("/admin")({
 function AdminPage() {
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-hero text-primary-foreground border-b">
+      <header className="bg-hero text-white border-b border-white/10">
         <div className="mx-auto max-w-6xl px-4 py-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">Painel do Administrador</h1>
-              <p className="mt-1 text-sm opacity-90">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">Painel do Administrador</h1>
+              <p className="mt-1 text-sm text-white/80">
                 Controle de acesso exclusivo por e-mail · Portal do Concurseiro
               </p>
             </div>
