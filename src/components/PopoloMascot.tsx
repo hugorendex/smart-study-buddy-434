@@ -14,6 +14,7 @@ import {
   Bot,
   Captions,
   Play,
+  Mic,
 } from "lucide-react";
 
 export type PopoloMood = "normal" | "feliz" | "pensativo" | "atento" | "dormindo" | "comemorando";
@@ -28,6 +29,8 @@ export type PopoloProps = {
   onAbrirErros?: () => void;
 };
 
+
+const AUDIO_URL_OFICIAL = "/audio/oi-eu-sou-o-popolo.mp3";
 const DICAS_GERAIS = [
   "A banca Cesgranrio adora casos práticos! Leia o comando com atenção para não cair em pegadinhas.",
   "Direito Penal: preste atenção na diferença entre dolo eventual e culpa consciente!",
@@ -73,12 +76,15 @@ export function PopoloMascot({
   const [piscando, setPiscando] = useState(false);
   const [brincadeiraContador, setBrincadeiraContador] = useState(0);
 
-  // Perfil da voz: "crianca" (padrão) ou "robo"
-  const [perfilVoz, setPerfilVoz] = useState<"crianca" | "robo">(() => {
-    if (typeof window === "undefined") return "crianca";
+  // Perfil da voz: "oficial" (áudio real enviado), "crianca" ou "robo"
+  const [perfilVoz, setPerfilVoz] = useState<"oficial" | "crianca" | "robo">(() => {
+    if (typeof window === "undefined") return "oficial";
     const salvo = localStorage.getItem("popolo_perfil_voz");
-    return salvo === "robo" ? "robo" : "crianca";
+    if (salvo === "robo" || salvo === "crianca" || salvo === "oficial") return salvo;
+    return "oficial";
   });
+  const [audioRealTocando, setAudioRealTocando] = useState(false);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   // Controle de Voz / Áudio (Web Speech API)
   const [vozAtiva, setVozAtiva] = useState<boolean>(() => {
@@ -99,6 +105,16 @@ export function PopoloMascot({
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Pré-carregamento do arquivo de áudio real oficial
+  useEffect(() => {
+    try {
+      const audio = new Audio(AUDIO_URL_OFICIAL);
+      audio.preload = "auto";
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   // Piscar de olhos periódico estilo Clippy
   useEffect(() => {
@@ -147,10 +163,82 @@ export function PopoloMascot({
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+    }
+    setAudioRealTocando(false);
     limparTimerFallback();
     setFalando(false);
     setPalavraAtivaIndex(null);
   }, [limparTimerFallback]);
+
+  // Reproduz o arquivo de áudio real do Popólo com sincronização precisa de boca e legenda
+  const reproduzirAudioOficial = useCallback((onFinished?: () => void) => {
+    pararFala();
+    if (typeof window === "undefined") return;
+
+    try {
+      setFalaCustomizada("Oi! Eu sou o Popólo! 🎈");
+      setMood("comemorando");
+      setBalaoAberto(true);
+      setMinimizado(false);
+
+      const audio = new Audio(AUDIO_URL_OFICIAL);
+      audioPlayerRef.current = audio;
+
+      audio.onplay = () => {
+        setFalando(true);
+        setAudioRealTocando(true);
+        setPalavraAtivaIndex(0);
+      };
+
+      // Sincroniza as palavras da frase com os tempos reais do áudio de 1.82s
+      audio.ontimeupdate = () => {
+        const t = audio.currentTime;
+        if (t < 0.40) {
+          setPalavraAtivaIndex(0); // "Oi!"
+        } else if (t < 0.72) {
+          setPalavraAtivaIndex(1); // "Eu"
+        } else if (t < 0.96) {
+          setPalavraAtivaIndex(2); // "sou"
+        } else if (t < 1.18) {
+          setPalavraAtivaIndex(3); // "o"
+        } else {
+          setPalavraAtivaIndex(4); // "Popólo!"
+        }
+      };
+
+      audio.onended = () => {
+        setFalando(false);
+        setAudioRealTocando(false);
+        setPalavraAtivaIndex(null);
+        if (onFinished) {
+          onFinished();
+        } else {
+          setTimeout(() => setMood("normal"), 2000);
+        }
+      };
+
+      audio.onerror = (e) => {
+        console.warn("Erro ao reproduzir áudio real do Popólo:", e);
+        setFalando(false);
+        setAudioRealTocando(false);
+        setPalavraAtivaIndex(null);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Autoplay do áudio real bloqueado pelo navegador:", err);
+          setFalando(false);
+          setAudioRealTocando(false);
+        });
+      }
+    } catch (e) {
+      console.warn("Falha ao iniciar áudio oficial:", e);
+    }
+  }, [pararFala]);
 
   // Iniciar animação de legenda sem som (modo leitura silenciosa sincronizada)
   const iniciarLegendaSilenciosa = useCallback(
@@ -177,8 +265,18 @@ export function PopoloMascot({
 
   // Função para executar a fala e sincronizar legenda palavra por palavra
   const falarTexto = useCallback(
-    (texto: string, perfilOverride?: "crianca" | "robo") => {
+    (texto: string, perfilOverride?: "oficial" | "crianca" | "robo") => {
       pararFala();
+
+      const perfil = perfilOverride || perfilVoz;
+      const ehApresentacao = texto.toLowerCase().includes("sou o popólo") || texto.toLowerCase().includes("sou o popolo");
+
+      if (perfil === "oficial" && ehApresentacao) {
+        if (vozAtiva) {
+          reproduzirAudioOficial();
+          return;
+        }
+      }
 
       const tokens = tokensPalavras;
       if (tokens.length === 0) return;
@@ -209,7 +307,10 @@ export function PopoloMascot({
 
         const perfil = perfilOverride || perfilVoz;
 
-        if (perfil === "crianca") {
+        if (perfil === "oficial") {
+          utterance.pitch = 1.72; // Afinada com a frequência de ~516Hz do áudio real gravado
+          utterance.rate = 1.12;
+        } else if (perfil === "crianca") {
           utterance.pitch = 1.68;
           utterance.rate = 1.1;
         } else {
@@ -327,21 +428,29 @@ export function PopoloMascot({
     });
   }, []);
 
-  // Alternar entre voz de criança e robô
+  // Alternar entre voz oficial gravada, voz de criança e robô
   const alternarPerfilVoz = useCallback(() => {
     setPerfilVoz((prev) => {
-      const novo = prev === "crianca" ? "robo" : "crianca";
+      let novo: "oficial" | "crianca" | "robo";
+      if (prev === "oficial") novo = "crianca";
+      else if (prev === "crianca") novo = "robo";
+      else novo = "oficial";
+
       if (typeof window !== "undefined") {
         localStorage.setItem("popolo_perfil_voz", novo);
       }
-      const fraseExemplo =
-        novo === "crianca"
-          ? "Oba! Agora eu tô com voz de criança! Vamos estudar juntos?"
-          : "Bip bop! Voz de robô ativada para o serviço!";
-      falarTexto(fraseExemplo, novo);
+      if (novo === "oficial") {
+        reproduzirAudioOficial();
+      } else {
+        const fraseExemplo =
+          novo === "crianca"
+            ? "Oba! Agora eu tô com voz de criança! Vamos estudar juntos?"
+            : "Bip bop! Voz de robô ativada para o serviço!";
+        falarTexto(fraseExemplo, novo);
+      }
       return novo;
     });
-  }, [falarTexto]);
+  }, [reproduzirAudioOficial, falarTexto]);
 
   // Reação a sequências de acertos
   useEffect(() => {
@@ -389,8 +498,21 @@ export function PopoloMascot({
   }
 
   function interagirComPopolo() {
+    setMood("comemorando");
+    setBalaoAberto(true);
+    setMinimizado(false);
+
+    // Na primeira interação ou alternada com perfil oficial, toca a voz gravada real!
+    if (perfilVoz === "oficial" && (brincadeiraContador % 2 === 0 || brincadeiraContador === 0)) {
+      setFalaCustomizada("Oi! Eu sou o Popólo! 🎈");
+      setBrincadeiraContador((prev) => prev + 1);
+      if (!modoSimulado && vozAtiva) {
+        reproduzirAudioOficial();
+      }
+      return;
+    }
+
     const frasesCrianca = [
-      "Oi! Eu sou o Popólo! Sabia que quem estuda todo dia passa na prova rapidinho?",
       "Olha só meu distintivo de policial mirim! Ele brilha quando você acerta!",
       "Força aí! Não desiste que o distintivo da PC-AP tá te esperando!",
       "Eba! Que questão legal, vamos acertar essa juntos?",
@@ -402,9 +524,6 @@ export function PopoloMascot({
     const novaFrase = frasesCrianca[brincadeiraContador % frasesCrianca.length];
     setBrincadeiraContador((prev) => prev + 1);
     setFalaCustomizada(novaFrase);
-    setMood("feliz");
-    setBalaoAberto(true);
-    setMinimizado(false);
 
     if (!modoSimulado) {
       falarTexto(novaFrase);
@@ -468,18 +587,24 @@ export function PopoloMascot({
               </span>
               <span className="text-xs font-bold text-accent">Popólo</span>
               
-              {/* Seletor de voz infantil */}
+              {/* Seletor de voz oficial / criança / robô */}
               <button
                 type="button"
                 onClick={alternarPerfilVoz}
                 className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
-                  perfilVoz === "crianca"
-                    ? "bg-amber-500/15 border-amber-500/40 text-amber-500 hover:bg-amber-500/25"
+                  perfilVoz === "oficial"
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30"
+                    : perfilVoz === "crianca"
+                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/25"
                     : "bg-muted border-border text-muted-foreground hover:text-foreground"
                 }`}
-                title="Clique para alternar entre Voz de Criança e Voz de Robô"
+                title="Clique para alternar: Voz Real Gravada, Voz de Criança ou Robô"
               >
-                {perfilVoz === "crianca" ? (
+                {perfilVoz === "oficial" ? (
+                  <>
+                    <Mic className="h-2.5 w-2.5 text-amber-400" /> Voz Real
+                  </>
+                ) : perfilVoz === "crianca" ? (
                   <>
                     <Baby className="h-2.5 w-2.5" /> Criança
                   </>
@@ -622,6 +747,17 @@ export function PopoloMascot({
                 Outra dica <ChevronRight className="h-3 w-3 ml-0.5" />
               </Button>
 
+              {/* Botão para tocar a voz real gravada diretamente */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => reproduzirAudioOficial()}
+                className="text-[11px] h-7 px-2 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold"
+                title="Reproduzir o áudio oficial com a voz real do Popólo"
+              >
+                <Mic className="h-3 w-3 mr-1 text-amber-400" /> Voz Real
+              </Button>
+
               {/* Botão para ouvir ou acompanhar legenda */}
               <Button
                 variant={falando ? "secondary" : "ghost"}
@@ -629,6 +765,8 @@ export function PopoloMascot({
                 onClick={() => {
                   if (falando) {
                     pararFala();
+                  } else if (falaAtual.toLowerCase().includes("sou o popólo") || falaAtual.toLowerCase().includes("sou o popolo")) {
+                    reproduzirAudioOficial();
                   } else {
                     falarTexto(falaAtual);
                   }
