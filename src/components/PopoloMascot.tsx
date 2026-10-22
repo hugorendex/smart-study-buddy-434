@@ -1,23 +1,9 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Sparkles,
-  X,
-  Volume2,
-  VolumeX,
-  ChevronRight,
-  Shield,
-  Minimize2,
-  Maximize2,
-  Square,
-  Baby,
-  Bot,
-  Captions,
-  Play,
-  Mic,
-} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Shield, Volume2, VolumeX } from "lucide-react";
 
 export type PopoloMood = "normal" | "feliz" | "pensativo" | "atento" | "dormindo" | "comemorando";
+
+export type StatsData = Record<string, { certas: number; total: number }>;
 
 export type PopoloProps = {
   materiaAtual?: string;
@@ -25,38 +11,35 @@ export type PopoloProps = {
   totalAcertos?: number;
   errosPendentes?: number;
   modoSimulado?: boolean;
+  stats?: StatsData;
+  dataProva?: string;
+  cargoDesejado?: string;
   onEstudarMateria?: (materia: string) => void;
   onAbrirErros?: () => void;
 };
 
-
 const AUDIO_URL_OFICIAL = "/audio/oi-eu-sou-o-popolo.mp3";
-const DICAS_GERAIS = [
-  "A banca Cesgranrio adora casos práticos! Leia o comando com atenção para não cair em pegadinhas.",
-  "Direito Penal: preste atenção na diferença entre dolo eventual e culpa consciente!",
-  "Constitucional: direitos e garantias fundamentais despencam na prova da PC-AP. Não pule o art. 5º!",
-  "Português: crase antes de palavra feminina é regra, mas cuidado com as exceções e expressões adverbiais.",
-  "Dica de ouro: quando estiver em dúvida entre duas, procure palavras muito extremas como sempre, nunca e jamais.",
-  "Raciocínio Lógico: monte tabelas-verdade ou diagramas de Venn, não tente fazer tudo de cabeça!",
-  "Direito Administrativo: decore os princípios do LIMPE e os atos administrativos, seus requisitos e atributos!",
-  "História e Geografia do Amapá: estude bem a criação do Território Federal e a Batalha da Fortaleza de São José!",
-  "Já bebeu água hoje? O cérebro hidratado processa informações 14% mais rápido!",
-  "Descanso faz parte do estudo: após 50 minutos de foco, 5 minutos de pausa ajudam a consolidar a memória.",
+
+const DICAS_TATICA_CONCURSO = [
+  "Dica de prova: comece lendo o comando final da questão antes do texto longo. Assim você já lê procurando a resposta!",
+  "A banca Cesgranrio adora casos práticos! Fique muito atento aos detalhes das alternativas para não cair em pegadinhas.",
+  "Direito Penal: preste atenção na diferença entre dolo eventual e culpa consciente. Isso despenca em carreiras policiais!",
+  "Direito Constitucional: não deixe de revisar o artigo quinto da Constituição. Direitos e garantias fundamentais caem em quase todas as provas!",
+  "Português: cuidado com palavras absolutas como sempre, nunca e jamais nas alternativas. Quase sempre tornam o item incorreto!",
+  "Raciocínio Lógico: monte diagramas ou tabelas em vez de tentar resolver tudo de cabeça. Poupa tempo e evita erros bobos!",
+  "Direito Administrativo: lembre-se do mnemônico LIMPE: Legalidade, Impessoalidade, Moralidade, Publicidade e Eficiência!",
+  "História e Geografia do Amapá: revise os marcos da Fortaleza de São José de Macapá e a transição do Território Federal!",
+  "Estratégia de simulado: controle seu tempo em cerca de três minutos por questão para não se enrolar no final da prova!",
+  "Técnica de eliminação: corte primeiro as duas alternativas com erros óbvios. Suas chances de acertar sobem para cinquenta por cento!",
 ];
 
 function limparTextoParaFala(texto: string): string {
   return texto
     .replace(/[🤖⭐🔥★^💡🎯✓✕""]/g, "")
-    .replace(/\bPC-AP\b/g, "Polícia Civil do Amapá").replace(/\bpopolo\b/gi, "Popólo")
+    .replace(/\bPC-AP\b/g, "Polícia Civil do Amapá")
+    .replace(/\bpopolo\b/gi, "Popólo")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-interface WordToken {
-  id: number;
-  text: string;
-  start: number;
-  end: number;
 }
 
 export function PopoloMascot({
@@ -65,48 +48,47 @@ export function PopoloMascot({
   totalAcertos = 0,
   errosPendentes = 0,
   modoSimulado = false,
+  stats = {},
+  dataProva,
+  cargoDesejado,
   onEstudarMateria,
   onAbrirErros,
 }: PopoloProps) {
-  const [minimizado, setMinimizado] = useState(false);
-  const [balaoAberto, setBalaoAberto] = useState(true);
   const [mood, setMood] = useState<PopoloMood>("normal");
-  const [dicaIndex, setDicaIndex] = useState(0);
-  const [falaCustomizada, setFalaCustomizada] = useState<string | null>(null);
-  const [piscando, setPiscando] = useState(false);
-  const [brincadeiraContador, setBrincadeiraContador] = useState(0);
-
-  // Perfil da voz: "oficial" (áudio real enviado), "crianca" ou "robo"
-  const [perfilVoz, setPerfilVoz] = useState<"oficial" | "crianca" | "robo">(() => {
-    if (typeof window === "undefined") return "oficial";
-    const salvo = localStorage.getItem("popolo_perfil_voz");
-    if (salvo === "robo" || salvo === "crianca" || salvo === "oficial") return salvo;
-    return "oficial";
-  });
-  const [audioRealTocando, setAudioRealTocando] = useState(false);
-  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-
-  // Controle de Voz / Áudio (Web Speech API)
-  const [vozAtiva, setVozAtiva] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const salvo = localStorage.getItem("popolo_voz_ativa");
-    return salvo !== null ? salvo === "true" : true;
-  });
-
-  // Controle de Legenda Sincronizada (Closed Caption)
-  const [legendaAtiva, setLegendaAtiva] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const salvo = localStorage.getItem("popolo_legenda_ativa");
-    return salvo !== null ? salvo === "true" : true;
-  });
-
   const [falando, setFalando] = useState(false);
-  const [palavraAtivaIndex, setPalavraAtivaIndex] = useState<number | null>(null);
+  const [piscando, setPiscando] = useState(false);
+  const [interacaoIndex, setInteracaoIndex] = useState(0);
+  const [vozesDisponiveis, setVozesDisponiveis] = useState<SpeechSynthesisVoice[]>([]);
 
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Carrega e atualiza vozes do sistema (especialmente no Chrome/Edge/Safari)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const carregarVozes = () => {
+      const v = window.speechSynthesis.getVoices();
+      if (v.length > 0) setVozesDisponiveis(v);
+    };
+    carregarVozes();
+    window.speechSynthesis.onvoiceschanged = carregarVozes;
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
 
-  // Pré-carregamento do arquivo de áudio real oficial
+  // Controle de Mudo / Som (persistido no localStorage)
+  const [somAtivo, setSomAtivo] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const salvo = localStorage.getItem("popolo_som_ativo");
+    return salvo !== "false";
+  });
+
+  // Cronômetro de tempo de estudo contínuo da sessão (em segundos)
+  const [segundosEstudo, setSegundosEstudo] = useState(0);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const streakAnteriorRef = useRef(acertosSeguidos);
+
+  // Pré-carregamento do áudio oficial
   useEffect(() => {
     try {
       const audio = new Audio(AUDIO_URL_OFICIAL);
@@ -116,49 +98,16 @@ export function PopoloMascot({
     }
   }, []);
 
-  // Piscar de olhos periódico estilo Clippy
+  // Piscar de olhos periódico
   useEffect(() => {
     const blinkInterval = setInterval(() => {
       setPiscando(true);
-      setTimeout(() => setPiscando(false), 200);
-    }, 4000);
+      setTimeout(() => setPiscando(false), 160);
+    }, 4200);
     return () => clearInterval(blinkInterval);
   }, []);
 
-  const falaAtual = useMemo(() => {
-    if (falaCustomizada) return falaCustomizada;
-    if (modoSimulado) return "Estou em Modo Foco acompanhando seu Simulado. Força na prova!";
-    if (errosPendentes > 5) {
-      return `Aviso do Popólo: Você tem ${errosPendentes} erros no Caderno de Erros. Vale a pena revisar antes de dormir!`;
-    }
-    return DICAS_GERAIS[dicaIndex % DICAS_GERAIS.length];
-  }, [falaCustomizada, modoSimulado, errosPendentes, dicaIndex]);
-
-  // Tokeniza a fala atual em palavras com posições para sincronia precisa
-  const tokensPalavras = useMemo<WordToken[]>(() => {
-    const tokens: WordToken[] = [];
-    const regex = /\S+/g;
-    let match;
-    let id = 0;
-    while ((match = regex.exec(falaAtual)) !== null) {
-      tokens.push({
-        id: id++,
-        text: match[0],
-        start: match.index,
-        end: match.index + match[0].length,
-      });
-    }
-    return tokens;
-  }, [falaAtual]);
-
-  // Limpar timer de fallback de legenda
-  const limparTimerFallback = useCallback(() => {
-    if (fallbackIntervalRef.current) {
-      clearInterval(fallbackIntervalRef.current);
-      fallbackIntervalRef.current = null;
-    }
-  }, []);
-
+  // Parar qualquer áudio ou síntese ativa
   const pararFala = useCallback(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -167,686 +116,335 @@ export function PopoloMascot({
       audioPlayerRef.current.pause();
       audioPlayerRef.current.currentTime = 0;
     }
-    setAudioRealTocando(false);
-    limparTimerFallback();
     setFalando(false);
-    setPalavraAtivaIndex(null);
-  }, [limparTimerFallback]);
+  }, []);
 
-  // Reproduz o arquivo de áudio real do Popólo com sincronização precisa de boca e legenda
+  // Reproduz o áudio real original do Popólo ("Oi! Eu sou o Popólo!")
   const reproduzirAudioOficial = useCallback((onFinished?: () => void) => {
     pararFala();
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !somAtivo) return;
 
     try {
-      setFalaCustomizada("Oi! Eu sou o Popólo! 🎈");
       setMood("comemorando");
-      setBalaoAberto(true);
-      setMinimizado(false);
-
       const audio = new Audio(AUDIO_URL_OFICIAL);
       audioPlayerRef.current = audio;
 
       audio.onplay = () => {
         setFalando(true);
-        setAudioRealTocando(true);
-        setPalavraAtivaIndex(0);
-      };
-
-      // Sincroniza as palavras da frase com os tempos reais do áudio de 1.82s
-      audio.ontimeupdate = () => {
-        const t = audio.currentTime;
-        if (t < 0.40) {
-          setPalavraAtivaIndex(0); // "Oi!"
-        } else if (t < 0.72) {
-          setPalavraAtivaIndex(1); // "Eu"
-        } else if (t < 0.96) {
-          setPalavraAtivaIndex(2); // "sou"
-        } else if (t < 1.18) {
-          setPalavraAtivaIndex(3); // "o"
-        } else {
-          setPalavraAtivaIndex(4); // "Popólo!"
-        }
       };
 
       audio.onended = () => {
         setFalando(false);
-        setAudioRealTocando(false);
-        setPalavraAtivaIndex(null);
-        if (onFinished) {
-          onFinished();
-        } else {
-          setTimeout(() => setMood("normal"), 2000);
-        }
+        setMood("normal");
+        if (onFinished) onFinished();
       };
 
-      audio.onerror = (e) => {
-        console.warn("Erro ao reproduzir áudio real do Popólo:", e);
+      audio.onerror = () => {
         setFalando(false);
-        setAudioRealTocando(false);
-        setPalavraAtivaIndex(null);
+        setMood("normal");
       };
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn("Autoplay do áudio real bloqueado pelo navegador:", err);
+        playPromise.catch(() => {
           setFalando(false);
-          setAudioRealTocando(false);
+          setMood("normal");
         });
       }
     } catch (e) {
-      console.warn("Falha ao iniciar áudio oficial:", e);
+      setFalando(false);
+      setMood("normal");
     }
-  }, [pararFala]);
+  }, [pararFala, somAtivo]);
 
-  // Iniciar animação de legenda sem som (modo leitura silenciosa sincronizada)
-  const iniciarLegendaSilenciosa = useCallback(
-    (tokens: WordToken[]) => {
-      limparTimerFallback();
-      setFalando(true);
-      let idx = 0;
-      setPalavraAtivaIndex(0);
-
-      // Velocidade média de leitura: ~220ms por palavra
-      fallbackIntervalRef.current = setInterval(() => {
-        idx++;
-        if (idx < tokens.length) {
-          setPalavraAtivaIndex(idx);
-        } else {
-          limparTimerFallback();
-          setFalando(false);
-          setPalavraAtivaIndex(null);
-        }
-      }, 240);
-    },
-    [limparTimerFallback]
-  );
-
-  // Função para executar a fala e sincronizar legenda palavra por palavra
+  // Sintetiza frases com a voz afinada no perfil sonoro exato do Popólo
   const falarTexto = useCallback(
-    (texto: string, perfilOverride?: "oficial" | "crianca" | "robo") => {
+    (texto: string, animacaoMood: PopoloMood = "feliz") => {
       pararFala();
+      if (typeof window === "undefined" || !somAtivo) return;
 
-      const perfil = perfilOverride || perfilVoz;
-      const ehApresentacao = texto.toLowerCase().includes("sou o popólo") || texto.toLowerCase().includes("sou o popolo");
+      const textoLimpo = limparTextoParaFala(texto);
+      if (!textoLimpo) return;
 
-      if (perfil === "oficial" && ehApresentacao) {
-        if (vozAtiva) {
-          reproduzirAudioOficial();
-          return;
-        }
-      }
-
-      const tokens = tokensPalavras;
-      if (tokens.length === 0) return;
-
-      // Se a voz estiver desativada pelo usuário, executa a legenda visual sincronizada!
-      if (!vozAtiva) {
-        if (legendaAtiva) {
-          iniciarLegendaSilenciosa(tokens);
-        }
-        return;
-      }
-
-      if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-        if (legendaAtiva) {
-          iniciarLegendaSilenciosa(tokens);
-        }
-        return;
-      }
-
-      try {
+      if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
-
-        const textoLimpo = limparTextoParaFala(texto);
-        if (!textoLimpo) return;
 
         const utterance = new SpeechSynthesisUtterance(textoLimpo);
         utterance.lang = "pt-BR";
+        // Afinação no timbre exato do áudio gravado do Popólo
+        utterance.pitch = 1.72;
+        utterance.rate = 1.12;
 
-        const perfil = perfilOverride || perfilVoz;
+        const vozes = vozesDisponiveis.length > 0 ? vozesDisponiveis : window.speechSynthesis.getVoices();
+        const vozPt = vozes.find(
+          (v) =>
+            v.lang.startsWith("pt") &&
+            (v.name.toLowerCase().includes("maria") ||
+              v.name.toLowerCase().includes("luciana") ||
+              v.name.toLowerCase().includes("brazil") ||
+              v.name.toLowerCase().includes("pt-br"))
+        ) || vozes.find((v) => v.lang.startsWith("pt"));
 
-        if (perfil === "oficial") {
-          utterance.pitch = 1.72; // Afinada com a frequência de ~516Hz do áudio real gravado
-          utterance.rate = 1.12;
-        } else if (perfil === "crianca") {
-          utterance.pitch = 1.68;
-          utterance.rate = 1.1;
-        } else {
-          utterance.pitch = 1.15;
-          utterance.rate = 1.05;
+        if (vozPt) {
+          utterance.voice = vozPt;
         }
-
-        const voices = window.speechSynthesis.getVoices();
-        const vozInfantilPt =
-          voices.find(
-            (v) =>
-              v.lang.toLowerCase().includes("pt") &&
-              (v.name.toLowerCase().includes("francisca") ||
-                v.name.toLowerCase().includes("maria") ||
-                v.name.toLowerCase().includes("luciana") ||
-                v.name.toLowerCase().includes("vitória") ||
-                v.name.toLowerCase().includes("vitoria") ||
-                v.name.toLowerCase().includes("leticia") ||
-                v.name.toLowerCase().includes("google português"))
-          ) ||
-          voices.find((v) => v.lang.toLowerCase() === "pt-br") ||
-          voices.find((v) => v.lang.toLowerCase().startsWith("pt"));
-
-        if (vozInfantilPt) {
-          utterance.voice = vozInfantilPt;
-        }
-
-        let boundaryFired = false;
-
-        // Sincronização em tempo real de cada palavra falada (Web Speech boundary)
-        utterance.onboundary = (event) => {
-          if (event.name === "word") {
-            boundaryFired = true;
-            limparTimerFallback();
-            const charIdx = event.charIndex;
-            // Encontra a palavra correspondente na lista de tokens
-            const matchIndex = tokens.findIndex(
-              (t) => charIdx >= t.start && charIdx <= t.end + 2
-            );
-            if (matchIndex !== -1) {
-              setPalavraAtivaIndex(matchIndex);
-            }
-          }
-        };
 
         utterance.onstart = () => {
           setFalando(true);
-          setPalavraAtivaIndex(0);
-
-          // Fallback caso o navegador não emita onboundary (ex: alguns navegadores mobile)
-          setTimeout(() => {
-            if (!boundaryFired) {
-              let fallbackIdx = 0;
-              fallbackIntervalRef.current = setInterval(() => {
-                fallbackIdx++;
-                if (fallbackIdx < tokens.length) {
-                  setPalavraAtivaIndex(fallbackIdx);
-                } else {
-                  limparTimerFallback();
-                }
-              }, 230);
-            }
-          }, 350);
+          setMood(animacaoMood);
         };
 
         utterance.onend = () => {
-          limparTimerFallback();
           setFalando(false);
-          setPalavraAtivaIndex(null);
+          setMood("normal");
         };
 
         utterance.onerror = () => {
-          limparTimerFallback();
           setFalando(false);
-          setPalavraAtivaIndex(null);
+          setMood("normal");
         };
 
-        utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        console.warn("Erro ao sintetizar voz do Popólo:", e);
-        if (legendaAtiva) {
-          iniciarLegendaSilenciosa(tokens);
-        } else {
-          setFalando(false);
-          setPalavraAtivaIndex(null);
-        }
       }
     },
-    [tokensPalavras, vozAtiva, legendaAtiva, perfilVoz, pararFala, limparTimerFallback, iniciarLegendaSilenciosa]
+    [pararFala, somAtivo]
   );
 
-  // Alternar voz e salvar preferência
-  const toggleVoz = useCallback(() => {
-    setVozAtiva((prev) => {
-      const novo = !prev;
-      if (typeof window !== "undefined") {
-        localStorage.setItem("popolo_voz_ativa", String(novo));
-        if (!novo) {
-          pararFala();
-        }
-      }
-      return novo;
-    });
-  }, [pararFala]);
-
-  // Alternar legenda sincronizada e salvar preferência
-  const toggleLegenda = useCallback(() => {
-    setLegendaAtiva((prev) => {
-      const novo = !prev;
-      if (typeof window !== "undefined") {
-        localStorage.setItem("popolo_legenda_ativa", String(novo));
-      }
-      return novo;
-    });
-  }, []);
-
-  // Alternar entre voz oficial gravada, voz de criança e robô
-  const alternarPerfilVoz = useCallback(() => {
-    setPerfilVoz((prev) => {
-      let novo: "oficial" | "crianca" | "robo";
-      if (prev === "oficial") novo = "crianca";
-      else if (prev === "crianca") novo = "robo";
-      else novo = "oficial";
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("popolo_perfil_voz", novo);
-      }
-      if (novo === "oficial") {
-        reproduzirAudioOficial();
-      } else {
-        const fraseExemplo =
-          novo === "crianca"
-            ? "Oba! Agora eu tô com voz de criança! Vamos estudar juntos?"
-            : "Bip bop! Voz de robô ativada para o serviço!";
-        falarTexto(fraseExemplo, novo);
-      }
-      return novo;
-    });
-  }, [reproduzirAudioOficial, falarTexto]);
-
-  // Reação a sequências de acertos
+  // Monitor de tempo de estudo contínuo para indicar pausa após 1 hora (3600 segundos)
   useEffect(() => {
-    if (acertosSeguidos >= 3) {
-      setMood("comemorando");
-      const frase = `Eba! Demais! ${acertosSeguidos} acertos seguidos! Você tá arrasando nos estudos!`;
-      setFalaCustomizada(frase);
-      setBalaoAberto(true);
-      if (!modoSimulado) {
-        falarTexto(frase);
+    const timer = setInterval(() => {
+      setSegundosEstudo((prev) => {
+        const novo = prev + 1;
+        // Ao atingir exatamente 1 hora (3600 segundos)
+        if (novo === 3600) {
+          if (!modoSimulado && somAtivo) {
+            falarTexto(
+              "Atenção, policial! Você já está estudando há uma hora sem parar! Hora de levantar, beber uma água bem gelada, esticar o corpo e respirar cinco minutinhos. Seu cérebro precisa dessa pausa para fixar tudo na memória!",
+              "atento"
+            );
+          }
+        }
+        return novo;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [modoSimulado, somAtivo, falarTexto]);
+
+  // Reação em voz alta quando o aluno atinge sequências de acertos (Streak)
+  useEffect(() => {
+    if (modoSimulado) return;
+
+    if (acertosSeguidos >= 3 && acertosSeguidos !== streakAnteriorRef.current) {
+      if (acertosSeguidos === 3) {
+        falarTexto("Muito bom, policial! Três acertos seguidos! Mantenha esse foco!", "comemorando");
+      } else if (acertosSeguidos === 5) {
+        falarTexto("Incrível! Cinco questões certas seguidas! Você está dominando a matéria!", "comemorando");
+      } else if (acertosSeguidos === 10) {
+        falarTexto("Espetacular! Dez acertos seguidos! O distintivo da Polícia Civil já é seu!", "comemorando");
       }
-      const timer = setTimeout(() => {
-        setMood("normal");
-      }, 6000);
-      return () => clearTimeout(timer);
     }
+    streakAnteriorRef.current = acertosSeguidos;
   }, [acertosSeguidos, modoSimulado, falarTexto]);
 
-  // Silenciar ou recolher em modo simulado
-  useEffect(() => {
-    if (modoSimulado) {
-      pararFala();
-      setMinimizado(true);
-      setMood("atento");
-      setBalaoAberto(false);
-    }
-  }, [modoSimulado, pararFala]);
+  // Diagnóstico das matérias que o aluno mais precisa focar
+  const gerarDicaMateria = useCallback(() => {
+    const entries = Object.entries(stats).filter(([, s]) => s.total >= 2);
 
-  // Cleanup ao desmontar
-  useEffect(() => {
-    return () => {
-      pararFala();
-    };
-  }, [pararFala]);
+    if (entries.length > 0) {
+      // Ordena por menor aproveitamento
+      entries.sort((a, b) => a[1].certas / a[1].total - b[1].certas / b[1].total);
+      const [piorMateria, s] = entries[0];
+      const taxa = Math.round((s.certas / s.total) * 100);
 
-  function proximaDica() {
-    setFalaCustomizada(null);
-    const proximoIndex = dicaIndex + 1;
-    setDicaIndex(proximoIndex);
-    setMood("normal");
-    const proxima = DICAS_GERAIS[proximoIndex % DICAS_GERAIS.length];
-    if (!modoSimulado) {
-      falarTexto(proxima);
-    }
-  }
-
-  function interagirComPopolo() {
-    setMood("comemorando");
-    setBalaoAberto(true);
-    setMinimizado(false);
-
-    // Na primeira interação ou alternada com perfil oficial, toca a voz gravada real!
-    if (perfilVoz === "oficial" && (brincadeiraContador % 2 === 0 || brincadeiraContador === 0)) {
-      setFalaCustomizada("Oi! Eu sou o Popólo! 🎈");
-      setBrincadeiraContador((prev) => prev + 1);
-      if (!modoSimulado && vozAtiva) {
-        reproduzirAudioOficial();
+      if (taxa < 65) {
+        return `Policial, analisei seu histórico e sua taxa de acertos em ${piorMateria} está em ${taxa} por cento. Recomendo focar nela hoje para garantir esses pontos preciosos na prova!`;
       }
+    }
+
+    if (errosPendentes > 0) {
+      return `Você tem ${errosPendentes} questões aguardando revisão no seu Caderno de Erros. O grande segredo da aprovação é não repetir os mesmos erros!`;
+    }
+
+    return "Para maximizar sua nota de corte, concentre seus estudos em Língua Portuguesa e Direito Penal, que são as matérias com mais peso e questões na prova!";
+  }, [stats, errosPendentes]);
+
+  // Contagem regressiva de dias para a prova do concurso
+  const gerarDicaContagemDias = useCallback(() => {
+    if (!dataProva) {
+      return "Defina a data da sua prova no seu perfil para eu acompanhar sua contagem regressiva diária até o dia da posse!";
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const alvo = new Date(dataProva + "T00:00:00");
+    const diffDias = Math.ceil((alvo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDias > 1) {
+      return `Faltam apenas ${diffDias} dias para a sua prova do concurso! Mantenha a constância diária, cada questão resolvida hoje conta muito!`;
+    } else if (diffDias === 1) {
+      return "Atenção: sua prova é amanhã! Revise apenas tópicos leves, descanse a mente e durma cedo para render ao máximo!";
+    } else if (diffDias === 0) {
+      return "Hoje é o grande dia da sua prova! Mantenha a calma, confie em todo o seu estudo e vá buscar o seu distintivo!";
+    } else {
+      return "Sua prova já passou! Continue resolvendo questões para manter o ritmo afiado para os próximos editais!";
+    }
+  }, [dataProva]);
+
+  // Alternância de falas ao clicar no mascote
+  const interagirComPopolo = () => {
+    // Se estiver falando e clicar nele, interrompe imediatamente
+    if (falando) {
+      pararFala();
       return;
     }
 
-    const frasesCrianca = [
-      "Olha só meu distintivo de policial mirim! Ele brilha quando você acerta!",
-      "Força aí! Não desiste que o distintivo da PC-AP tá te esperando!",
-      "Eba! Que questão legal, vamos acertar essa juntos?",
-      "Tô torcendo muito por você! Foco total nas questões!",
-      "Bip bop! A bateria do Popólo tá 100% cheia pra te ajudar a passar!",
-      "O Popólo tá aqui torcendo muito pela sua posse na PC-AP!",
-      "Força nos estudos! Com o Popólo do seu lado, a aprovação vem mais rápido!",
-    ];
-    const novaFrase = frasesCrianca[brincadeiraContador % frasesCrianca.length];
-    setBrincadeiraContador((prev) => prev + 1);
-    setFalaCustomizada(novaFrase);
+    const passo = interacaoIndex % 5;
+    setInteracaoIndex((prev) => prev + 1);
 
-    if (!modoSimulado) {
-      falarTexto(novaFrase);
+    // 1º passo: toca a voz real oficial gravada ("Oi! Eu sou o Popólo!")
+    if (passo === 0) {
+      reproduzirAudioOficial();
+      return;
     }
-  }
 
-  // Se o aluno minimizou totalmente
-  if (minimizado) {
-    return (
-      <aside aria-label="Popólo assistente minimizado" className="fixed bottom-24 sm:bottom-20 right-5 z-50">
-        <button
-          type="button"
-          onClick={() => {
-            setMinimizado(false);
-            setBalaoAberto(true);
-            if (!modoSimulado) {
-              falarTexto(falaAtual);
-            }
-          }}
-          className="group relative flex items-center gap-2 rounded-full border-2 border-accent bg-card px-3 py-2 shadow-xl hover:scale-105 transition-all duration-300"
-          title="Clique para chamar o Popólo"
-        >
-          {/* Avatar mini */}
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-inner">
-            <span className="text-sm">🧒</span>
-            {falando && (
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
-              </span>
-            )}
-            {!falando && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent"></span>
-              </span>
-            )}
-          </div>
-          <span className="text-xs font-bold text-foreground group-hover:text-accent transition-colors">
-            Popólo
-          </span>
-          <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
-      </aside>
-    );
-  }
+    // 2º passo: foco nas matérias de menor desempenho / erros pendentes
+    if (passo === 1) {
+      falarTexto(gerarDicaMateria(), "pensativo");
+      return;
+    }
+
+    // 3º passo: contagem de dias para a prova do concurso
+    if (passo === 2) {
+      falarTexto(gerarDicaContagemDias(), "atento");
+      return;
+    }
+
+    // 4º passo: dica tática de banca examinadora e concurso policial
+    if (passo === 3) {
+      const dicaAleatoria = DICAS_TATICA_CONCURSO[Math.floor(Math.random() * DICAS_TATICA_CONCURSO.length)];
+      falarTexto(dicaAleatoria, "feliz");
+      return;
+    }
+
+    // 5º passo: incentivo de foco e hidratação
+    if (passo === 4) {
+      const minutos = Math.floor(segundosEstudo / 60);
+      if (minutos >= 30) {
+        falarTexto(`Você já está focado há ${minutos} minutos! Lembre-se de beber água e manter a postura firme. A aprovação é construída bloco a bloco!`, "feliz");
+      } else {
+        falarTexto("Lembre-se: concurseiro aprovado estuda com foco e constância. Resolva mais um bloco de questões agora para subir sua média!", "feliz");
+      }
+      return;
+    }
+  };
+
+  const alternarMudo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSomAtivo((prev) => {
+      const novo = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("popolo_som_ativo", String(novo));
+      }
+      if (!novo) {
+        pararFala();
+      }
+      return novo;
+    });
+  };
 
   return (
-    <aside aria-label="Popólo assistente" className="fixed bottom-24 sm:bottom-20 right-5 z-50 flex flex-col items-end pointer-events-none select-none">
-      {/* Balão de Fala estilo Clippy do Windows com Legenda Sincronizada */}
-      {balaoAberto && (
-        <div className="pointer-events-auto mb-2 max-w-[290px] sm:max-w-[340px] rounded-2xl border-2 border-accent/40 bg-card/95 backdrop-blur-md p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-300 relative text-foreground">
-          {/* Triângulo / Cauda do Balão apontando para o Robô */}
-          <div className="absolute -bottom-2 right-8 h-3 w-3 rotate-45 border-r-2 border-b-2 border-accent/40 bg-card"></div>
-
-          {/* Cabeçalho do Balão */}
-          <div className="flex items-center justify-between border-b border-border/60 pb-2 mb-2">
-            <div className="flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded bg-accent/20 text-accent text-xs font-bold">
-                ⭐
-              </span>
-              <span className="text-xs font-bold text-accent">Popólo</span>
-              
-              {/* Seletor de voz oficial / criança / robô */}
-              <button
-                type="button"
-                onClick={alternarPerfilVoz}
-                className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
-                  perfilVoz === "oficial"
-                    ? "bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30"
-                    : perfilVoz === "crianca"
-                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/25"
-                    : "bg-muted border-border text-muted-foreground hover:text-foreground"
-                }`}
-                title="Clique para alternar: Voz Real Gravada, Voz de Criança ou Robô"
-              >
-                {perfilVoz === "oficial" ? (
-                  <>
-                    <Mic className="h-2.5 w-2.5 text-amber-400" /> Voz Real
-                  </>
-                ) : perfilVoz === "crianca" ? (
-                  <>
-                    <Baby className="h-2.5 w-2.5" /> Criança
-                  </>
-                ) : (
-                  <>
-                    <Bot className="h-2.5 w-2.5" /> Robô
-                  </>
-                )}
-              </button>
-
-              {falando && (
-                <span className="flex items-center gap-0.5 ml-1" title="Reproduzindo agora">
-                  <span className="h-2 w-0.5 bg-cyan-400 animate-pulse"></span>
-                  <span className="h-3 w-0.5 bg-cyan-400 animate-pulse delay-75"></span>
-                  <span className="h-1.5 w-0.5 bg-cyan-400 animate-pulse delay-150"></span>
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {/* Botão de Legenda Sincronizada [CC] */}
-              <button
-                type="button"
-                onClick={toggleLegenda}
-                className={`h-6 px-1.5 rounded flex items-center gap-1 text-[10px] font-black border transition-colors ${
-                  legendaAtiva
-                    ? "bg-primary/15 border-primary/30 text-primary"
-                    : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
-                }`}
-                title={legendaAtiva ? "Legenda ativada (clique para ocultar)" : "Legenda desativada (clique para ativar)"}
-              >
-                <Captions className="h-3.5 w-3.5" />
-                <span>CC</span>
-              </button>
-
-              {/* Botão de Ligar/Desligar Voz */}
-              <button
-                type="button"
-                onClick={toggleVoz}
-                className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
-                  vozAtiva
-                    ? "text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                }`}
-                title={vozAtiva ? "Voz ligada (clique para silenciar)" : "Voz desligada (clique para ativar som)"}
-              >
-                {vozAtiva ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  pararFala();
-                  setMinimizado(true);
-                }}
-                className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
-                title="Minimizar Popólo"
-              >
-                <Minimize2 className="h-3 w-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  pararFala();
-                  setBalaoAberto(false);
-                }}
-                className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
-                title="Fechar fala"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Texto com sincronização palavra por palavra (karaoke teleprompter) */}
-          <div className="relative">
-            <p className="text-xs leading-relaxed text-foreground font-medium">
-              {tokensPalavras.map((token, index) => {
-                const isActive = falando && palavraAtivaIndex === index;
-                const isPast = falando && palavraAtivaIndex !== null && index < palavraAtivaIndex;
-
-                if (isActive) {
-                  return (
-                    <span
-                      key={token.id}
-                      className="inline-block px-1 py-0.5 mx-0.5 rounded-md bg-amber-400/25 text-amber-500 dark:text-amber-300 font-extrabold shadow-sm scale-110 transition-transform duration-100 border border-amber-400/40"
-                    >
-                      {token.text}{" "}
-                    </span>
-                  );
-                }
-
-                if (isPast && legendaAtiva) {
-                  return (
-                    <span key={token.id} className="text-foreground/90 transition-colors">
-                      {token.text}{" "}
-                    </span>
-                  );
-                }
-
-                return (
-                  <span
-                    key={token.id}
-                    className={`transition-colors ${
-                      falando && legendaAtiva ? "text-muted-foreground/80" : "text-foreground"
-                    }`}
-                  >
-                    {token.text}{" "}
-                  </span>
-                );
-              })}
-            </p>
-
-            {/* Faixa de Legenda Sincronizada em Destaque (Closed Caption) */}
-            {legendaAtiva && falando && palavraAtivaIndex !== null && (
-              <div className="mt-2.5 rounded-lg bg-slate-950/90 border border-amber-400/40 px-2.5 py-1.5 shadow-lg flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150">
-                <span className="flex h-4 px-1 items-center justify-center rounded bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-wider">
-                  CC
-                </span>
-                <span className="text-[11px] font-bold text-amber-200 truncate">
-                  {tokensPalavras[palavraAtivaIndex]?.text || "..."}
-                </span>
-                {!vozAtiva && (
-                  <span className="ml-auto text-[9px] text-muted-foreground">
-                    Modo Silencioso
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Ações do Balão */}
-          <div className="mt-3 pt-2 border-t border-border/40 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={proximaDica}
-                className="text-[11px] h-7 px-2 font-semibold text-muted-foreground hover:text-foreground"
-              >
-                Outra dica <ChevronRight className="h-3 w-3 ml-0.5" />
-              </Button>
-
-              {/* Botão para tocar a voz real gravada diretamente */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => reproduzirAudioOficial()}
-                className="text-[11px] h-7 px-2 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold"
-                title="Reproduzir o áudio oficial com a voz real do Popólo"
-              >
-                <Mic className="h-3 w-3 mr-1 text-amber-400" /> Voz Real
-              </Button>
-
-              {/* Botão para ouvir ou acompanhar legenda */}
-              <Button
-                variant={falando ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => {
-                  if (falando) {
-                    pararFala();
-                  } else if (falaAtual.toLowerCase().includes("sou o popólo") || falaAtual.toLowerCase().includes("sou o popolo")) {
-                    reproduzirAudioOficial();
-                  } else {
-                    falarTexto(falaAtual);
-                  }
-                }}
-                className="text-[11px] h-7 px-2 text-accent hover:text-accent font-semibold"
-                title={vozAtiva ? "Reproduzir fala em áudio e legenda" : "Acompanhar legenda sincronizada sem som"}
-              >
-                {falando ? (
-                  <>
-                    <Square className="h-2.5 w-2.5 mr-1 fill-current" /> Parar
-                  </>
-                ) : vozAtiva ? (
-                  <>
-                    <Volume2 className="h-3 w-3 mr-1" /> Ouvir
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3 w-3 mr-1 fill-current" /> Ver legenda
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {errosPendentes > 0 && onAbrirErros && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  pararFala();
-                  onAbrirErros();
-                  setBalaoAberto(false);
-                }}
-                className="text-[11px] h-7 px-2 border-red-500/30 text-red-500 hover:bg-red-500/10 font-bold"
-              >
-                Revisar {errosPendentes} erros
-              </Button>
-            )}
+    <aside
+      aria-label="Popólo assistente de estudos"
+      className="fixed bottom-24 sm:bottom-20 right-5 z-50 flex flex-col items-end select-none"
+    >
+      {/* Indicador visual sonoro discreto flutuante apenas quando ele está falando */}
+      {falando && (
+        <div className="mb-1 flex items-center gap-1 rounded-full bg-amber-500/90 text-slate-950 px-2 py-0.5 text-[10px] font-black shadow-lg animate-bounce">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-950 animate-ping"></span>
+          <span>Falando...</span>
+          <div className="flex gap-0.5 items-center ml-0.5">
+            <span className="h-2 w-0.5 bg-slate-950 animate-pulse"></span>
+            <span className="h-3 w-0.5 bg-slate-950 animate-pulse delay-75"></span>
+            <span className="h-1.5 w-0.5 bg-slate-950 animate-pulse delay-150"></span>
           </div>
         </div>
       )}
 
-      {/* Personagem Popolo (Clippy Robô com Distintivo) */}
-      <div className="pointer-events-auto relative group cursor-pointer" onClick={interagirComPopolo}>
-        {/* Anel de destaque / distintivo */}
-        <div className={`relative flex flex-col items-center justify-center transition-transform duration-300 group-hover:scale-110 ${mood === "comemorando" ? "animate-bounce" : ""} ${falando ? "scale-105" : ""}`}>
-          
-          {/* Antena com LED piscante */}
+      {/* Personagem Popólo (Robô Tech com Distintivo Policial) */}
+      <div
+        className="relative group cursor-pointer"
+        onClick={interagirComPopolo}
+        title={falando ? "Clique para silenciar o Popólo" : "Clique para ouvir o Popólo falar! 🎈"}
+      >
+        <div
+          className={`relative flex flex-col items-center justify-center transition-transform duration-300 group-hover:scale-110 ${
+            mood === "comemorando" ? "animate-bounce" : ""
+          } ${falando ? "scale-105" : ""}`}
+        >
+          {/* Antena com LED tecnológico */}
           <div className="flex flex-col items-center -mb-1">
-            <span className={`h-2.5 w-2.5 rounded-full border border-background shadow-md transition-colors ${falando ? "bg-amber-400 animate-ping" : mood === "comemorando" ? "bg-amber-400 animate-ping" : "bg-emerald-400 animate-pulse"}`}></span>
+            <span
+              className={`h-2.5 w-2.5 rounded-full border border-background shadow-md transition-colors ${
+                falando
+                  ? "bg-amber-400 animate-ping"
+                  : mood === "comemorando"
+                  ? "bg-amber-400 animate-ping"
+                  : "bg-emerald-400 animate-pulse"
+              }`}
+            ></span>
             <span className="h-2.5 w-0.5 bg-slate-400"></span>
           </div>
 
           {/* Cabeça do Robozinho Tech */}
-          <div className={`relative h-14 w-16 sm:h-16 sm:w-18 rounded-2xl border-2 ${falando ? "border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)]" : "border-accent/60"} bg-gradient-to-b from-slate-900 to-slate-800 p-1.5 shadow-2xl flex flex-col items-center justify-between transition-all duration-300`}>
+          <div
+            className={`relative h-14 w-16 sm:h-16 sm:w-18 rounded-2xl border-2 ${
+              falando
+                ? "border-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.6)]"
+                : "border-accent/60"
+            } bg-gradient-to-b from-slate-900 to-slate-800 p-1.5 shadow-2xl flex flex-col items-center justify-between transition-all duration-300`}
+          >
             {/* Orelhas / Headset dourado estilo distintivo */}
             <span className="absolute -left-1.5 top-3 h-4 w-2 rounded-l-md bg-accent border border-accent/80"></span>
             <span className="absolute -right-1.5 top-3 h-4 w-2 rounded-r-md bg-accent border border-accent/80"></span>
 
             {/* Tela dos Olhos Expressivos (Visor digital) */}
             <div className="w-full h-8 rounded-lg bg-black/90 border border-slate-700 flex items-center justify-center gap-2 px-1 relative overflow-hidden">
-              {/* Scanline decorativo */}
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent pointer-events-none animate-pulse"></div>
 
               {/* Olho Esquerdo */}
-              <div className={`transition-all duration-150 flex items-center justify-center ${piscando ? "h-0.5 w-3 bg-cyan-400" : mood === "feliz" || mood === "comemorando" ? "h-3.5 w-3.5 text-cyan-300 text-xs font-black" : "h-3.5 w-3.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"}`}>
+              <div
+                className={`transition-all duration-150 flex items-center justify-center ${
+                  piscando
+                    ? "h-0.5 w-3 bg-cyan-400"
+                    : mood === "feliz" || mood === "comemorando"
+                    ? "h-3.5 w-3.5 text-cyan-300 text-xs font-black"
+                    : "h-3.5 w-3.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                }`}
+              >
                 {mood === "comemorando" && "★"}
                 {mood === "feliz" && "^"}
               </div>
 
               {/* Olho Direito */}
-              <div className={`transition-all duration-150 flex items-center justify-center ${piscando ? "h-0.5 w-3 bg-cyan-400" : mood === "feliz" || mood === "comemorando" ? "h-3.5 w-3.5 text-cyan-300 text-xs font-black" : "h-3.5 w-3.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"}`}>
+              <div
+                className={`transition-all duration-150 flex items-center justify-center ${
+                  piscando
+                    ? "h-0.5 w-3 bg-cyan-400"
+                    : mood === "feliz" || mood === "comemorando"
+                    ? "h-3.5 w-3.5 text-cyan-300 text-xs font-black"
+                    : "h-3.5 w-3.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                }`}
+              >
                 {mood === "comemorando" && "★"}
                 {mood === "feliz" && "^"}
               </div>
             </div>
 
-            {/* Boca / Painel inferior */}
+            {/* Painel inferior da boca e identificação policial */}
             <div className="w-full flex items-center justify-between px-1">
               <span className="text-[9px] font-black text-accent tracking-tighter">PC-AP</span>
-              {/* Boca animada quando falando */}
+              {/* Boca animada sincronizada com o áudio */}
               {falando ? (
                 <div className="flex gap-0.5 items-center">
                   <span className="h-2 w-1 rounded-full bg-amber-400 animate-bounce"></span>
@@ -864,17 +462,41 @@ export function PopoloMascot({
             </div>
           </div>
 
-          {/* Distintivo / Corpo miniatura estilo distintivo policial */}
-          <div className="-mt-1 flex items-center justify-center">
-            <div className={`flex items-center gap-1 rounded-full border ${falando ? "border-amber-400 bg-amber-950/90" : "border-accent bg-slate-900/90"} px-2 py-0.5 shadow-md transition-colors`}>
-              <span className="text-[9px] font-black text-accent uppercase">Popólo</span>
+          {/* Distintivo / Corpo com nome Popólo e botão discreto de Mudo */}
+          <div className="-mt-1 flex items-center justify-center gap-1">
+            <div
+              className={`flex items-center gap-1 rounded-full border ${
+                falando
+                  ? "border-amber-400 bg-amber-950/90 text-amber-300"
+                  : "border-accent bg-slate-900/90 text-accent"
+              } px-2 py-0.5 shadow-md transition-colors`}
+            >
+              <span className="text-[9px] font-black uppercase">Popólo</span>
             </div>
+
+            {/* Botão miniatura de Mudo para ambientes de estudo / biblioteca */}
+            <button
+              type="button"
+              onClick={alternarMudo}
+              className={`h-5 w-5 rounded-full border flex items-center justify-center transition-colors shadow ${
+                somAtivo
+                  ? "bg-slate-900 border-slate-700 text-slate-300 hover:text-white"
+                  : "bg-red-950/80 border-red-500/60 text-red-400 hover:text-red-300"
+              }`}
+              title={somAtivo ? "Som ativado (clique para mutar)" : "Popólo mutado (clique para ativar som)"}
+            >
+              {somAtivo ? (
+                <Volume2 className="h-2.5 w-2.5" />
+              ) : (
+                <VolumeX className="h-2.5 w-2.5" />
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Efeito tooltip ao passar o mouse */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 right-0 bg-popover text-popover-foreground text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border">
-          {falando ? "Falando com legenda sincronizada..." : "Clique para falar com o Popólo! 🎈"}
+        {/* Micro-tooltip ao passar o mouse */}
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-7 right-0 bg-popover/90 text-popover-foreground text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border backdrop-blur-sm">
+          {falando ? "Clique para parar a fala" : "Toque no Popólo para ouvir! 🎈"}
         </div>
       </div>
     </aside>
