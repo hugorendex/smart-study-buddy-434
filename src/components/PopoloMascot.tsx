@@ -22,7 +22,6 @@ export type PopoloProps = {
   onAbrirErros?: () => void;
 };
 
-const AUDIO_URL_OFICIAL = "/audio/oi-eu-sou-o-popolo.mp3";
 
 const DICAS_TATICA_CONCURSO = [
   "Dica de prova: comece lendo o comando final da questão antes do texto longo. Assim você já lê procurando a resposta!",
@@ -91,18 +90,7 @@ export function PopoloMascot({
 
   // Cronômetro de tempo de estudo contínuo da sessão (em segundos)
   const [segundosEstudo, setSegundosEstudo] = useState(0);
-  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const streakAnteriorRef = useRef(acertosSeguidos);
-
-  // Pré-carregamento do áudio oficial
-  useEffect(() => {
-    try {
-      const audio = new Audio(AUDIO_URL_OFICIAL);
-      audio.preload = "auto";
-    } catch (e) {
-      // ignore
-    }
-  }, []);
 
   // Piscar de olhos periódico
   useEffect(() => {
@@ -118,50 +106,8 @@ export function PopoloMascot({
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current.currentTime = 0;
-    }
     setFalando(false);
   }, []);
-
-  // Reproduz o áudio real original do Popólo ("Oi! Eu sou o Popólo!")
-  const reproduzirAudioOficial = useCallback((onFinished?: () => void) => {
-    pararFala();
-    if (typeof window === "undefined" || !somAtivo) return;
-
-    try {
-      setMood("comemorando");
-      const audio = new Audio(AUDIO_URL_OFICIAL);
-      audioPlayerRef.current = audio;
-
-      audio.onplay = () => {
-        setFalando(true);
-      };
-
-      audio.onended = () => {
-        setFalando(false);
-        setMood("normal");
-        if (onFinished) onFinished();
-      };
-
-      audio.onerror = () => {
-        setFalando(false);
-        setMood("normal");
-      };
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          setFalando(false);
-          setMood("normal");
-        });
-      }
-    } catch (e) {
-      setFalando(false);
-      setMood("normal");
-    }
-  }, [pararFala, somAtivo]);
 
   // Sintetiza frases com a voz afinada no perfil sonoro exato do Popólo
   const falarTexto = useCallback(
@@ -178,18 +124,14 @@ export function PopoloMascot({
         const utterance = new SpeechSynthesisUtterance(textoLimpo);
         utterance.lang = "pt-BR";
         // Afinação no timbre exato do áudio gravado do Popólo
-        utterance.pitch = 1.72;
-        utterance.rate = 1.12;
+        utterance.pitch = 1.6;
+        utterance.rate = 1.08;
 
         const vozes = vozesDisponiveis.length > 0 ? vozesDisponiveis : window.speechSynthesis.getVoices();
-        const vozPt = vozes.find(
-          (v) =>
-            v.lang.startsWith("pt") &&
-            (v.name.toLowerCase().includes("maria") ||
-              v.name.toLowerCase().includes("luciana") ||
-              v.name.toLowerCase().includes("brazil") ||
-              v.name.toLowerCase().includes("pt-br"))
-        ) || vozes.find((v) => v.lang.startsWith("pt"));
+        // Voz única e fixa do Popólo: menino (voz masculina pt-BR com tom agudo)
+        const pt = vozes.filter((v) => v.lang.toLowerCase().startsWith("pt"));
+        const masc = ["daniel", "antonio", "antônio", "felipe", "ricardo", "fabio", "male", "masculin", "thiago", "donato", "julio"];
+        const vozPt = pt.find((v) => masc.some((n) => v.name.toLowerCase().includes(n))) || pt[0];
 
         if (vozPt) {
           utterance.voice = vozPt;
@@ -322,7 +264,7 @@ export function PopoloMascot({
 
     // 1º passo: toca a voz real oficial gravada ("Oi! Eu sou o Popólo!")
     if (passo === 0) {
-      reproduzirAudioOficial();
+      falarTexto("Oi! Eu sou o Popólo, seu mentor de estudos. Bora resolver umas questões?", "comemorando");
       return;
     }
 
