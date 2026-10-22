@@ -1,3 +1,4 @@
+import capaEstudo from "@/assets/capa-estudo.jpg";
 import { AccessibilityBar } from "@/components/AccessibilityBar";
 import {
   MATERIAS,
@@ -204,6 +205,20 @@ function dispararNotificacaoNativa(titulo: string, corpo: string) {
 
 type TabType = "hoje" | "questoes" | "erros" | "cronograma" | "simulado" | "desempenho" | "turbo";
 
+const PILARES = [
+  ["hoje", "Início", Sparkles],
+  ["questoes", "Praticar", BookOpen],
+  ["simulado", "Simulado", Award],
+  ["cronograma", "Plano", Calendar],
+  ["desempenho", "Evolução", BarChart3],
+] as const;
+
+function pilarDe(t: TabType): TabType {
+  if (t === "erros") return "questoes";
+  if (t === "turbo") return "desempenho";
+  return t;
+}
+
 function Index() {
   const [tab, setTab] = useState<TabType>("hoje");
   const [studyTopic, setStudyTopic] = useState<{ materia: string; topico: string; id: number; autoStart?: boolean }>();
@@ -356,8 +371,10 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground transition-colors pb-20 sm:pb-8">
       <AccessibilityBar />
 
-      <header className="bg-hero text-white border-b border-white/10 shadow-md">
-        <div className="mx-auto max-w-5xl px-4 pb-5 pt-6 sm:pb-7 sm:pt-8">
+      <header className="relative overflow-hidden bg-hero text-white border-b border-white/10 shadow-md">
+        <img src={capaEstudo} alt="" aria-hidden="true" width={1920} height={768} className="absolute inset-0 h-full w-full object-cover opacity-40" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-primary/30" />
+        <div className="relative mx-auto max-w-5xl px-4 pb-5 pt-6 sm:pb-7 sm:pt-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -425,22 +442,12 @@ function Index() {
 
           {/* Abas no Desktop */}
           <nav className="mt-6 hidden sm:flex items-center gap-1.5 overflow-x-auto pb-1">
-            {(
-              [
-                ["hoje", "🎯 Modo Foco", Sparkles],
-                ["questoes", "Praticar", BookOpen],
-                ["erros", `Caderno de Erros ${errosPendentes > 0 ? `(${errosPendentes})` : ""}`, AlertCircle],
-                ["cronograma", "Cronograma", Calendar],
-                ["simulado", "Simulado Oficial", Award],
-                ["desempenho", "Evolução", BarChart3],
-                ["turbo", "Turbo", Sparkles],
-              ] as const
-            ).map(([k, l, Icon]) => (
+            {PILARES.map(([k, l, Icon]) => (
               <Button
                 key={k}
                 onClick={() => setTab(k as TabType)}
                 className={`rounded-full px-4 py-2 text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
-                  tab === k
+                  pilarDe(tab) === k
                     ? "bg-accent text-accent-foreground shadow-sm font-bold"
                     : "bg-white/10 text-white hover:bg-white/20"
                 }`}
@@ -484,6 +491,25 @@ function Index() {
                   <Button size="sm" className="bg-accent text-accent-foreground font-semibold shrink-0" onClick={() => setModalPerfilAberto(true)}>
                     Personalizar Agora
                   </Button>
+                </div>
+              )}
+
+              {/* Sub-abas dos pilares */}
+              {(pilarDe(tab) === "questoes" || pilarDe(tab) === "desempenho") && (
+                <div className="mb-5 inline-flex rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold">
+                  {(pilarDe(tab) === "questoes"
+                    ? ([["questoes", "Questões"], ["erros", `Caderno de Erros${errosPendentes > 0 ? ` (${errosPendentes})` : ""}`]] as const)
+                    : ([["desempenho", "Desempenho"], ["turbo", "Conquistas & Foco"]] as const)
+                  ).map(([k, l]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setTab(k as TabType)}
+                      className={`rounded-full px-4 py-1.5 transition ${tab === k ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -538,18 +564,8 @@ function Index() {
         aria-label="Navegação mobile"
         className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1.5 flex items-center justify-around shadow-lg"
       >
-        {(
-          [
-            ["hoje", "Foco", Sparkles],
-            ["questoes", "Praticar", BookOpen],
-            ["erros", "Erros", AlertCircle],
-            ["cronograma", "Plano", Calendar],
-            ["simulado", "Simulado", Award],
-            ["desempenho", "Evolução", BarChart3],
-            ["turbo", "Turbo", Sparkles],
-          ] as const
-        ).map(([k, l, Icon]) => {
-          const ativo = tab === k;
+        {PILARES.map(([k, l, Icon]) => {
+          const ativo = pilarDe(tab) === k;
           return (
             <button
               type="button"
@@ -564,7 +580,7 @@ function Index() {
             >
               <Icon className={`h-4 w-4 mb-0.5 ${ativo ? "scale-110" : ""}`} />
               <span>{l}</span>
-              {k === "erros" && errosPendentes > 0 && (
+              {k === "questoes" && errosPendentes > 0 && (
                 <span className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
                   {errosPendentes}
                 </span>
