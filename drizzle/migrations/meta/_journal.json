@@ -57,6 +57,13 @@
       "when": 1792630457138,
       "tag": "0008_authorized_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792630755693,
+      "tag": "0009_seed_mais_questoes_todas_materias",
+      "breakpoints": true
     }
   ]
 }
