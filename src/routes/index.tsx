@@ -1,3 +1,4 @@
+import capaEstudo from "@/assets/capa-estudo.jpg";
 import { AccessibilityBar } from "@/components/AccessibilityBar";
 import {
   MATERIAS,
@@ -370,8 +371,10 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground transition-colors pb-20 sm:pb-8">
       <AccessibilityBar />
 
-      <header className="bg-hero text-white border-b border-white/10 shadow-md">
-        <div className="mx-auto max-w-5xl px-4 pb-5 pt-6 sm:pb-7 sm:pt-8">
+      <header className="relative overflow-hidden bg-hero text-white border-b border-white/10 shadow-md">
+        <img src={capaEstudo} alt="" aria-hidden="true" width={1920} height={768} className="absolute inset-0 h-full w-full object-cover opacity-40" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-primary/30" />
+        <div className="relative mx-auto max-w-5xl px-4 pb-5 pt-6 sm:pb-7 sm:pt-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -577,7 +580,7 @@ function Index() {
             >
               <Icon className={`h-4 w-4 mb-0.5 ${ativo ? "scale-110" : ""}`} />
               <span>{l}</span>
-              {k === "erros" && errosPendentes > 0 && (
+              {k === "questoes" && errosPendentes > 0 && (
                 <span className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
                   {errosPendentes}
                 </span>
