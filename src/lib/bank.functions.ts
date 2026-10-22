@@ -80,11 +80,44 @@ function toDto(rows: any[]): BankQuestion[] {
   }));
 }
 
+
+async function assertUserAuthorized(supabase: any, userId: string, email?: string) {
+  try {
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+    if (isAdmin) return;
+  } catch {}
+
+  const emailLower = (email ?? "").toLowerCase().trim();
+  const db = await admin();
+
+  if (emailLower) {
+    try {
+      const { data: authRow } = await db.from("authorized_emails").select("status").ilike("email", emailLower).maybeSingle();
+      if (authRow?.status === "approved") return;
+      if (authRow?.status === "blocked") throw new Error("Acesso bloqueado pelo administrador.");
+    } catch (e: any) {
+      if (e?.message?.includes("bloqueado")) throw e;
+    }
+  }
+
+  try {
+    const { data: plan } = await db.from("user_plans").select("plan, premium_until").eq("user_id", userId).maybeSingle();
+    if (plan?.plan === "approved") return;
+    if (plan?.plan === "premium" && (!plan.premium_until || new Date(plan.premium_until).getTime() > Date.now())) return;
+    if (plan?.plan === "blocked") throw new Error("Acesso bloqueado pelo administrador.");
+  } catch (e: any) {
+    if (e?.message?.includes("bloqueado")) throw e;
+  }
+
+  throw new Error("Acesso restrito. Seu e-mail aguarda liberação pelo administrador.");
+}
+
 /** Returns questions this student has never seen, taking from the bank first. */
 export const getQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ materia: z.string().min(1), topico: z.string().optional(), quantidade: z.number().int().min(1).max(20) }))
   .handler(async ({ data, context }) => {
+    await assertUserAuthorized(context.supabase, context.userId, context.claims?.email);
     const take = async (n: number) => {
       const { data: rows, error } = await context.supabase.rpc("take_questions", {
         _materia: data.materia,
@@ -115,6 +148,7 @@ export const refillBank = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ materia: z.string().min(1) }))
   .handler(async ({ data, context }) => {
+    await assertUserAuthorized(context.supabase, context.userId, context.claims?.email);
     const { data: unseen } = await context.supabase.rpc("count_unseen", { _materia: data.materia });
     if ((unseen ?? 0) >= 8) return { ok: true, skipped: true };
     if (await aiPaused()) return { ok: false, skipped: true };
@@ -151,9 +185,4 @@ export const getMyStats = createServerFn({ method: "GET" })
 export const getSimulado = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ cargo: z.enum(["investigador", "delegado"]) }))
-  .handler(async ({ data, context }) => {
-    const { data: result, error } = await context.supabase.rpc("take_simulado", { _cargo: data.cargo });
-    if (error) return { questions: [] as BankQuestion[], error: "Não foi possível buscar o simulado. Tente novamente." };
-    const parsed = result as { questions?: any[]; error?: string | null } | null;
-    return { questions: toDto(parsed?.questions ?? []), error: parsed?.error ?? null };
-  });
+  
