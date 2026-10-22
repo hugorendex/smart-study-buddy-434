@@ -1,3 +1,4 @@
+import { AccessibilityBar } from "@/components/AccessibilityBar";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,8 @@ function Index() {
     setTab("questoes");
   }
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background text-foreground transition-colors">
+      <AccessibilityBar />
       <header className="bg-hero text-primary-foreground">
         <div className="mx-auto max-w-4xl px-4 pb-8 pt-8">
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">Sua aprovação começa aqui</p>
