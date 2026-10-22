@@ -527,6 +527,12 @@ function Index() {
         </AuthGate>
       </main>
 
+      <footer className="border-t border-border bg-card/60 mt-8 pb-20 sm:pb-0">
+        <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-muted-foreground">
+          © 2026 <span className="font-semibold text-foreground">Forte Soluções &amp; Serviços</span>. Todos os direitos reservados.
+        </div>
+      </footer>
+
       {/* Menu Inferior Fixo no Celular */}
       <nav
         aria-label="Navegação mobile"
