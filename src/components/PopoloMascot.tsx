@@ -9,8 +9,9 @@ import {
   Shield,
   Minimize2,
   Maximize2,
-  Play,
   Square,
+  Baby,
+  Bot,
 } from "lucide-react";
 
 export type PopoloMood = "normal" | "feliz" | "pensativo" | "atento" | "dormindo" | "comemorando";
@@ -63,6 +64,13 @@ export function PopoloMascot({
   const [piscando, setPiscando] = useState(false);
   const [brincadeiraContador, setBrincadeiraContador] = useState(0);
 
+  // Perfil da voz: "crianca" (padrão) ou "robo"
+  const [perfilVoz, setPerfilVoz] = useState<"crianca" | "robo">(() => {
+    if (typeof window === "undefined") return "crianca";
+    const salvo = localStorage.getItem("popolo_perfil_voz");
+    return salvo === "robo" ? "robo" : "crianca";
+  });
+
   // Controle de Voz / Áudio (Web Speech API)
   const [vozAtiva, setVozAtiva] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -90,9 +98,9 @@ export function PopoloMascot({
     return DICAS_GERAIS[dicaIndex % DICAS_GERAIS.length];
   }, [falaCustomizada, modoSimulado, errosPendentes, dicaIndex]);
 
-  // Função para executar a fala com a voz do navegador
+  // Função para executar a fala com voz de criança (pitch elevado, timbre jovem e alegre)
   const falarTexto = useCallback(
-    (texto: string) => {
+    (texto: string, perfilOverride?: "crianca" | "robo") => {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
       try {
@@ -103,16 +111,38 @@ export function PopoloMascot({
 
         const utterance = new SpeechSynthesisUtterance(textoLimpo);
         utterance.lang = "pt-BR";
-        utterance.rate = 1.05;
-        utterance.pitch = 1.15; // Toque ligeiramente agudo/robótico amigável
 
-        // Tentar obter voz em português
+        const perfil = perfilOverride || perfilVoz;
+
+        if (perfil === "crianca") {
+          // Ajustes acústicos para tom infantil: pitch alto (1.68) e fala ágil (1.1)
+          utterance.pitch = 1.68;
+          utterance.rate = 1.1;
+        } else {
+          // Tom robótico clássico
+          utterance.pitch = 1.15;
+          utterance.rate = 1.05;
+        }
+
+        // Tentar obter voz em português com timbre mais suave/feminino que soa perfeitamente infantil com pitch alto
         const voices = window.speechSynthesis.getVoices();
-        const vozPt =
+        const vozInfantilPt =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase().includes("pt") &&
+              (v.name.toLowerCase().includes("francisca") ||
+                v.name.toLowerCase().includes("maria") ||
+                v.name.toLowerCase().includes("luciana") ||
+                v.name.toLowerCase().includes("vitória") ||
+                v.name.toLowerCase().includes("vitoria") ||
+                v.name.toLowerCase().includes("leticia") ||
+                v.name.toLowerCase().includes("google português"))
+          ) ||
           voices.find((v) => v.lang.toLowerCase() === "pt-br") ||
           voices.find((v) => v.lang.toLowerCase().startsWith("pt"));
-        if (vozPt) {
-          utterance.voice = vozPt;
+
+        if (vozInfantilPt) {
+          utterance.voice = vozInfantilPt;
         }
 
         utterance.onstart = () => setFalando(true);
@@ -126,7 +156,7 @@ export function PopoloMascot({
         setFalando(false);
       }
     },
-    []
+    [perfilVoz]
   );
 
   const pararFala = useCallback(() => {
@@ -150,11 +180,28 @@ export function PopoloMascot({
     });
   }, [pararFala]);
 
+  // Alternar entre voz de criança e robô
+  const alternarPerfilVoz = useCallback(() => {
+    setPerfilVoz((prev) => {
+      const novo = prev === "crianca" ? "robo" : "crianca";
+      if (typeof window !== "undefined") {
+        localStorage.setItem("popolo_perfil_voz", novo);
+      }
+      // Falar exemplo para demonstrar a mudança
+      const fraseExemplo =
+        novo === "crianca"
+          ? "Oba! Agora eu tô com voz de criança! Vamos estudar juntos?"
+          : "Bip bop! Voz de robô ativada para o serviço!";
+      falarTexto(fraseExemplo, novo);
+      return novo;
+    });
+  }, [falarTexto]);
+
   // Reação a sequências de acertos
   useEffect(() => {
     if (acertosSeguidos >= 3) {
       setMood("comemorando");
-      const frase = `Sensacional! ${acertosSeguidos} acertos seguidos! Você tá pronto pra ser aprovado!`;
+      const frase = `Eba! Demais! ${acertosSeguidos} acertos seguidos! Você tá arrasando nos estudos!`;
       setFalaCustomizada(frase);
       setBalaoAberto(true);
       if (vozAtiva && !modoSimulado) {
@@ -189,16 +236,15 @@ export function PopoloMascot({
   }
 
   function interagirComPopolo() {
-    const frasesEngracadas = [
-      "Bip bop! Pronto para o plantão policial!",
-      "Aprovado em primeiro lugar no concurso de robôs!",
-      "Sabia que meu distintivo brilha no escuro?",
-      "Quem estuda, a banca não derruba!",
-      "Ei, parei de piscar por um segundo pra você ler a questão!",
-      "Vem cá, já fez seu bloco de questões de hoje?",
-      "Popolo na escuta: foco total no gabarito!",
+    const frasesCrianca = [
+      "Oi! Eu sou o Popolo! Sabia que quem estuda todo dia passa na prova rapidinho?",
+      "Olha só meu distintivo de policial mirim! Ele brilha quando você acerta!",
+      "Força aí! Não desiste que o distintivo da PC-AP tá te esperando!",
+      "Eba! Que questão legal, vamos acertar essa juntos?",
+      "Tô torcendo muito por você! Foco total nas questões!",
+      "Bip bop! Minha bateria tá 100% cheia pra te ajudar a passar!",
     ];
-    const novaFrase = frasesEngracadas[brincadeiraContador % frasesEngracadas.length];
+    const novaFrase = frasesCrianca[brincadeiraContador % frasesCrianca.length];
     setBrincadeiraContador((prev) => prev + 1);
     setFalaCustomizada(novaFrase);
     setMood("feliz");
@@ -228,7 +274,7 @@ export function PopoloMascot({
         >
           {/* Avatar mini */}
           <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-inner">
-            <span className="text-sm">🤖</span>
+            <span className="text-sm">🧒</span>
             {falando && (
               <span className="absolute -top-1 -right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
@@ -265,7 +311,30 @@ export function PopoloMascot({
               <span className="flex h-5 w-5 items-center justify-center rounded bg-accent/20 text-accent text-xs font-bold">
                 ⭐
               </span>
-              <span className="text-xs font-bold text-accent">Dica do Popolo</span>
+              <span className="text-xs font-bold text-accent">Popolo</span>
+              
+              {/* Seletor de voz infantil */}
+              <button
+                type="button"
+                onClick={alternarPerfilVoz}
+                className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+                  perfilVoz === "crianca"
+                    ? "bg-amber-500/15 border-amber-500/40 text-amber-500 hover:bg-amber-500/25"
+                    : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                }`}
+                title="Clique para alternar entre Voz de Criança e Voz de Robô"
+              >
+                {perfilVoz === "crianca" ? (
+                  <>
+                    <Baby className="h-2.5 w-2.5" /> Voz Criança
+                  </>
+                ) : (
+                  <>
+                    <Bot className="h-2.5 w-2.5" /> Voz Robô
+                  </>
+                )}
+              </button>
+
               {falando && (
                 <span className="flex items-center gap-0.5 ml-1">
                   <span className="h-2 w-0.5 bg-cyan-400 animate-pulse"></span>
@@ -343,7 +412,7 @@ export function PopoloMascot({
                   }
                 }}
                 className="text-[11px] h-7 px-2 text-accent hover:text-accent font-semibold"
-                title="Reproduzir fala em áudio"
+                title="Reproduzir fala em áudio de criança"
               >
                 {falando ? (
                   <>
@@ -351,7 +420,7 @@ export function PopoloMascot({
                   </>
                 ) : (
                   <>
-                    <Volume2 className="h-3 w-3 mr-1" /> Ouvir
+                    <Volume2 className="h-3 w-3 mr-1" /> Ouvir voz
                   </>
                 )}
               </Button>
@@ -441,7 +510,7 @@ export function PopoloMascot({
 
         {/* Efeito tooltip ao passar o mouse */}
         <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 right-0 bg-popover text-popover-foreground text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border">
-          {falando ? "Falando..." : "Clique no Popolo para falar! 🤖"}
+          {falando ? "Falando com voz de criança..." : "Clique para ouvir o Popolo! 🎈"}
         </div>
       </div>
     </aside>
