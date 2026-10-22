@@ -23,7 +23,7 @@ export function AuthGate({ children }: { children: (session: Session) => ReactNo
     if (!session) return;
     setAccess((prev) => ({ authorized: prev?.authorized ?? false, isAdmin: prev?.isAdmin ?? false, checking: true }));
     try {
-      const res = await checkUserAccess({ data: {} });
+      const res = await checkUserAccess({ data: {} as any });
       setAccess({ authorized: res.authorized, isAdmin: res.isAdmin, checking: false });
     } catch (e) {
       console.error("Erro ao verificar acesso:", e);

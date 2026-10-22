@@ -92,7 +92,7 @@ async function assertUserAuthorized(supabase: any, userId: string, email?: strin
 
   if (emailLower) {
     try {
-      const { data: authRow } = await db.from("authorized_emails").select("status").ilike("email", emailLower).maybeSingle();
+      const { data: authRow } = await (db as any).from("authorized_emails").select("status").ilike("email", emailLower).maybeSingle();
       if (authRow?.status === "approved") return;
       if (authRow?.status === "blocked") throw new Error("Acesso bloqueado pelo administrador.");
     } catch (e: any) {

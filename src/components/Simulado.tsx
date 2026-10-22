@@ -87,7 +87,7 @@ function salvarErrosNoCaderno(erradas: Item[]) {
 }
 
 export function Simulado() {
-  const gen = useServerFn(getSimulado);
+  const gen = useServerFn(getSimulado as any) as any;
   const [cargo, setCargo] = useState<Cargo>("investigador");
   const [fase, setFase] = useState<"inicio" | "gerando" | "prova" | "resultado">("inicio");
   const [itens, setItens] = useState<Item[]>([]);
