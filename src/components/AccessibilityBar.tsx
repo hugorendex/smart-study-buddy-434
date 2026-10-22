@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { safeStorage } from "@/lib/safe-storage";
 
 export function AccessibilityBar() {
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("portal_theme");
+      const saved = safeStorage.getItem("portal_theme");
       if (saved) return saved === "dark";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      try {
+        return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
+      } catch {
+        return false;
+      }
     }
     return false;
   });
 
   const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("portal_font_level");
+      const saved = safeStorage.getItem("portal_font_level");
       return saved ? parseInt(saved, 10) : 0;
     }
     return 0;
@@ -22,44 +26,49 @@ export function AccessibilityBar() {
 
   const [highContrast, setHighContrast] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("portal_contrast") === "high";
+      return safeStorage.getItem("portal_contrast") === "high";
     }
     return false;
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add("dark");
-      localStorage.setItem("portal_theme", "dark");
-    } else {
-      root.classList.remove("dark");
-      localStorage.setItem("portal_theme", "light");
-    }
+    try {
+      const root = document.documentElement;
+      if (isDark) {
+        root.classList.add("dark");
+        safeStorage.setItem("portal_theme", "dark");
+      } else {
+        root.classList.remove("dark");
+        safeStorage.setItem("portal_theme", "light");
+      }
+    } catch {}
   }, [isDark]);
 
   useEffect(() => {
-    const root = document.documentElement;
-    // Map levels -1, 0, 1, 2 to font-size percentages
-    const sizes: Record<number, string> = {
-      [-1]: "90%",
-      [0]: "100%",
-      [1]: "112.5%",
-      [2]: "125%",
-    };
-    root.style.fontSize = sizes[fontSizeLevel] || "100%";
-    localStorage.setItem("portal_font_level", fontSizeLevel.toString());
+    try {
+      const root = document.documentElement;
+      const sizes: Record<number, string> = {
+        [-1]: "90%",
+        [0]: "100%",
+        [1]: "112.5%",
+        [2]: "125%",
+      };
+      root.style.fontSize = sizes[fontSizeLevel] || "100%";
+      safeStorage.setItem("portal_font_level", fontSizeLevel.toString());
+    } catch {}
   }, [fontSizeLevel]);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (highContrast) {
-      root.classList.add("high-contrast");
-      localStorage.setItem("portal_contrast", "high");
-    } else {
-      root.classList.remove("high-contrast");
-      localStorage.setItem("portal_contrast", "normal");
-    }
+    try {
+      const root = document.documentElement;
+      if (highContrast) {
+        root.classList.add("high-contrast");
+        safeStorage.setItem("portal_contrast", "high");
+      } else {
+        root.classList.remove("high-contrast");
+        safeStorage.setItem("portal_contrast", "normal");
+      }
+    } catch {}
   }, [highContrast]);
 
   const toggleTheme = () => setIsDark((prev) => !prev);

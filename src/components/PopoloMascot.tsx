@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { safeStorage } from "@/lib/safe-storage";
 import { Shield, Volume2, VolumeX } from "lucide-react";
 
 export type PopoloMood = "normal" | "feliz" | "pensativo" | "atento" | "dormindo" | "comemorando";
@@ -83,7 +84,7 @@ export function PopoloMascot({
   // Controle de Mudo / Som (persistido no localStorage)
   const [somAtivo, setSomAtivo] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
-    const salvo = localStorage.getItem("popolo_som_ativo");
+    const salvo = safeStorage.getItem("popolo_som_ativo");
     return salvo !== "false";
   });
 
@@ -370,7 +371,7 @@ export function PopoloMascot({
     setSomAtivo((prev) => {
       const novo = !prev;
       if (typeof window !== "undefined") {
-        localStorage.setItem("popolo_som_ativo", String(novo));
+        safeStorage.setItem("popolo_som_ativo", String(novo));
       }
       if (!novo) {
         pararFala();

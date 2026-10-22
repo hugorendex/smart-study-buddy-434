@@ -96,3 +96,16 @@ describe("Filtragem dinâmica de matérias por concurso", () => {
     expect(pf).not.toContain("História e Geografia do Amapá");
   });
 });
+
+describe("Armazenamento seguro (safeStorage / safeSession)", () => {
+  it("lida com parsing e leitura sem disparar exceções", async () => {
+    const { safeStorage, safeSession } = await import("@/lib/safe-storage");
+    expect(safeStorage.getItem("chave-inexistente")).toBeNull();
+    safeStorage.setItem("chave-teste", JSON.stringify({ ok: true }));
+    expect(safeStorage.getItem("chave-teste")).toBe('{"ok":true}');
+    safeStorage.removeItem("chave-teste");
+    expect(safeStorage.getItem("chave-teste")).toBeNull();
+
+    expect(safeSession.getItem("sessao-inexistente")).toBeNull();
+  });
+});

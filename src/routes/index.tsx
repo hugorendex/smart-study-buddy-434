@@ -1,4 +1,5 @@
 import { AccessibilityBar } from "@/components/AccessibilityBar";
+import { safeStorage, safeSession } from "@/lib/safe-storage";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -227,19 +228,28 @@ const DEFAULT_PERFIL: PerfilAluno = {
 export function useLocal<T>(key: string, initial: T) {
   const [v, setV] = useState<T>(initial);
   useEffect(() => {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      try {
-        setV(JSON.parse(raw));
-      } catch {
-        /* Ignore invalid saved data. */
+    try {
+      const raw = safeStorage.getItem(key);
+      if (raw && raw !== "undefined" && raw !== "null") {
+        const parsed = JSON.parse(raw);
+        if (parsed !== null && parsed !== undefined) {
+          if (Array.isArray(initial)) {
+            setV(Array.isArray(parsed) ? (parsed as unknown as T) : initial);
+          } else if (typeof initial === "object" && initial !== null) {
+            setV({ ...initial, ...parsed });
+          } else {
+            setV(parsed);
+          }
+        }
       }
+    } catch {
+      /* Ignore invalid saved data. */
     }
   }, [key]);
   const set = (n: T | ((prev: T) => T)) => {
     setV((curr) => {
       const next = typeof n === "function" ? (n as (prev: T) => T)(curr) : n;
-      localStorage.setItem(key, JSON.stringify(next));
+      safeStorage.setItem(key, JSON.stringify(next));
       return next;
     });
   };
@@ -248,8 +258,9 @@ export function useLocal<T>(key: string, initial: T) {
 
 export function salvarErroGlobal(q: BankQuestion) {
   try {
-    const raw = localStorage.getItem("pcap-erros");
-    const lista: QuestaoErro[] = raw ? JSON.parse(raw) : [];
+    const raw = safeStorage.getItem("pcap-erros");
+    const lista: QuestaoErro[] = raw && raw !== "null" ? JSON.parse(raw) : [];
+    if (!Array.isArray(lista)) return;
     if (!lista.some((e) => e.materia === q.materia && e.enunciado === q.enunciado)) {
       lista.unshift({
         id: q.id,
@@ -261,7 +272,7 @@ export function salvarErroGlobal(q: BankQuestion) {
         explicacao: q.explicacao,
         dataErro: Date.now(),
       });
-      localStorage.setItem("pcap-erros", JSON.stringify(lista.slice(0, 200)));
+      safeStorage.setItem("pcap-erros", JSON.stringify(lista.slice(0, 200)));
     }
   } catch {}
 }
@@ -348,8 +359,8 @@ function Index() {
 
       if (lembretes.estudoHojeAtivo && lembretes.estudoHojeHorario === horaAtual) {
         const chaveDisparo = `pcap-lembrete-estudo-${dataHoje}-${horaAtual}`;
-        if (!sessionStorage.getItem(chaveDisparo)) {
-          sessionStorage.setItem(chaveDisparo, "1");
+        if (!safeSession.getItem(chaveDisparo)) {
+          safeSession.setItem(chaveDisparo, "1");
           setAlertaLembrete({
             tipo: "estudo",
             titulo: "⏰ Hora de Estudar!",
@@ -366,8 +377,8 @@ function Index() {
 
       if (lembretes.revisaoErrosAtivo && lembretes.revisaoErrosHorario === horaAtual && erros.length > 0) {
         const chaveDisparo = `pcap-lembrete-revisao-${dataHoje}-${horaAtual}`;
-        if (!sessionStorage.getItem(chaveDisparo)) {
-          sessionStorage.setItem(chaveDisparo, "1");
+        if (!safeSession.getItem(chaveDisparo)) {
+          safeSession.setItem(chaveDisparo, "1");
           setAlertaLembrete({
             tipo: "revisao",
             titulo: "🚨 Hora de Revisar Erros!",
@@ -472,7 +483,7 @@ function Index() {
                   title="Dias consecutivos de estudo"
                 >
                   <Flame className="h-3.5 w-3.5 fill-amber-400 text-amber-400 animate-pulse" />
-                  <span>{ofensiva.dias} {ofensiva.dias === 1 ? "dia" : "dias"} de ofensiva</span>
+                  <span>{ofensiva?.dias ?? 0} {(ofensiva?.dias ?? 0) === 1 ? "dia" : "dias"} de ofensiva</span>
                 </div>
 
                 {diasRestantes != null && (
@@ -720,35 +731,40 @@ function HojeDashboard({
   const [plano] = useLocal<ScheduleDay[]>("pcap-plano", []);
   const [feitos] = useLocal<Record<string, boolean>>("pcap-feitos", {});
 
-  const totalQuestoesFeitas = useMemo(
-    () => Object.values(hist).reduce((acc, curr) => acc + curr.length, 0),
-    [hist]
-  );
+  const totalQuestoesFeitas = useMemo(() => {
+    if (!hist || typeof hist !== "object") return 0;
+    return Object.values(hist).reduce((acc, curr) => acc + (Array.isArray(curr) ? curr.length : 0), 0);
+  }, [hist]);
 
   const materiaMaisFraca = useMemo(() => {
-    const arr = Object.entries(stats).filter(([, s]) => s.total >= 2);
+    if (!stats || typeof stats !== "object") return "Língua Portuguesa";
+    const arr = Object.entries(stats).filter(([, s]) => s && typeof s.total === "number" && s.total >= 2);
     if (!arr.length) return "Língua Portuguesa";
     arr.sort((a, b) => a[1].certas / a[1].total - b[1].certas / b[1].total);
     return arr[0][0];
   }, [stats]);
 
   const proximaTarefaCronograma = useMemo(() => {
-    if (!plano.length) return null;
+    if (!Array.isArray(plano) || !plano.length) return null;
     for (let d = 0; d < plano.length; d++) {
       const dia = plano[d];
+      if (!dia || !Array.isArray(dia.blocos)) continue;
       for (let b = 0; b < dia.blocos.length; b++) {
         const k = `${d}-${b}`;
-        if (!feitos[k]) return { dia: dia.dia, bloco: dia.blocos[b] };
+        if (!feitos || !feitos[k]) return { dia: dia.dia, bloco: dia.blocos[b] };
       }
     }
     return null;
   }, [plano, feitos]);
 
-  const acertoHoje = estudosHoje.resolvidas > 0
-    ? Math.round((estudosHoje.certas / estudosHoje.resolvidas) * 100)
+  const resolvidasHoje = estudosHoje?.resolvidas ?? 0;
+  const certasHoje = estudosHoje?.certas ?? 0;
+  const acertoHoje = resolvidasHoje > 0
+    ? Math.round((certasHoje / resolvidasHoje) * 100)
     : 0;
-  const minutosHoje = Math.floor((estudosHoje.tempoSegundos || 0) / 60);
-  const progressoMeta = Math.min(Math.round((totalQuestoesFeitas / perfil.metaSemanal) * 100), 100);
+  const minutosHoje = Math.floor(((estudosHoje?.tempoSegundos) || 0) / 60);
+  const metaAlvo = perfil?.metaSemanal || 50;
+  const progressoMeta = Math.min(Math.round((totalQuestoesFeitas / metaAlvo) * 100), 100);
 
   const card = "rounded-xl border bg-card p-4 sm:p-5 shadow-sm";
   const concursoNome = CONCURSOS_DISPONIVEIS.find((c) => c.id === (perfil.concurso || "PC-AP"))?.nome || "Seu concurso";
@@ -793,7 +809,7 @@ function HojeDashboard({
             <CheckCircle2 className="h-4 w-4 text-primary" />
             <span className="text-[10px] sm:text-xs font-semibold">Resolvidas hoje</span>
           </div>
-          <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{estudosHoje.resolvidas}</p>
+          <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{resolvidasHoje}</p>
           <p className="mt-0.5 text-[10px] text-muted-foreground">Meta semanal: {progressoMeta}%</p>
         </div>
 
@@ -803,7 +819,7 @@ function HojeDashboard({
             <span className="text-[10px] sm:text-xs font-semibold">Acerto hoje</span>
           </div>
           <p className="mt-2 text-xl sm:text-3xl font-black text-foreground">{acertoHoje}%</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">{estudosHoje.certas} corretas</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">{certasHoje} corretas</p>
         </div>
 
         <div className={`${card} p-3 sm:p-5`}>
@@ -840,7 +856,7 @@ function HojeDashboard({
             <Flame className="h-6 w-6 fill-amber-500 text-amber-500" />
           </div>
           <div>
-            <p className="text-2xl font-black text-foreground">{ofensiva.dias} {ofensiva.dias === 1 ? "dia" : "dias"}</p>
+            <p className="text-2xl font-black text-foreground">{ofensiva?.dias ?? 0} {ofensiva.dias === 1 ? "dia" : "dias"}</p>
             <p className="text-xs text-muted-foreground">na sua ofensiva de estudos</p>
           </div>
         </div>
