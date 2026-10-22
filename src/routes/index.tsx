@@ -32,6 +32,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { Simulado } from "@/components/Simulado";
+import { PopoloMascot } from "@/components/PopoloMascot";
 import { useServerFn } from "@tanstack/react-start";
 import { AuthGate } from "@/components/AuthGate";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,6 +195,7 @@ function Index() {
   const [erros, setErros] = useLocal<QuestaoErro[]>("pcap-erros", []);
   const [stats] = useLocal<Stats>("pcap-stats", {});
   const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
+  const [acertosSeguidos, setAcertosSeguidos] = useState(0);
   const [modalLembretesAberto, setModalLembretesAberto] = useState(false);
   const [lembretes, setLembretes] = useLocal<LembretesConfig>("pcap-lembretes", DEFAULT_LEMBRETES);
   const [alertaLembrete, setAlertaLembrete] = useState<{
@@ -335,6 +337,18 @@ function Index() {
               </Button>
             ))}
           </nav>
+
+      {/* Mascote Popolo Interativo (estilo Clippy do Windows) */}
+      <PopoloMascot
+        acertosSeguidos={acertosSeguidos}
+        errosPendentes={errosPendentes}
+        modoSimulado={tab === "simulado"}
+        onEstudarMateria={(m) => estudar(m, "")}
+        onAbrirErros={() => {
+          setTab("erros");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
         </div>
       </header>
 
@@ -441,6 +455,18 @@ function Index() {
           );
         })}
       </nav>
+
+      {/* Mascote Popolo Interativo (estilo Clippy do Windows) */}
+      <PopoloMascot
+        acertosSeguidos={acertosSeguidos}
+        errosPendentes={errosPendentes}
+        modoSimulado={tab === "simulado"}
+        onEstudarMateria={(m) => estudar(m, "")}
+        onAbrirErros={() => {
+          setTab("erros");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
 
       {/* Modal de Configuração de Metas / Perfil */}
       {modalPerfilAberto && (
@@ -1052,8 +1078,11 @@ function Questoes({
     if (!question || resp[i] !== undefined) return;
     setResp((prev) => ({ ...prev, [i]: a }));
 
+    const acertou = a === question.correta;
+    onResposta?.(acertou);
+
     // Se errou, salva automaticamente no caderno de erros
-    if (a !== question.correta) {
+    if (!acertou) {
       salvarErroGlobal(question);
     }
 
