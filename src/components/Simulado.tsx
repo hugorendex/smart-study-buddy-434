@@ -141,8 +141,9 @@ export function Simulado() {
       setIdx(0);
       setRestante(DURACAO);
       setFase("prova");
-    } catch {
-      setErr("Não foi possível buscar o simulado agora. Tente novamente.");
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" && e.message.length < 200 ? e.message : "";
+      setErr(msg || "Não foi possível buscar o simulado agora. Tente novamente.");
       setFase("inicio");
     }
   }
