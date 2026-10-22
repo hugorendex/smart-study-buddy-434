@@ -40,6 +40,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { Simulado } from "@/components/Simulado";
+import { Turbo } from "@/components/Turbo";
 import { PopoloMascot } from "@/components/PopoloMascot";
 import { useServerFn } from "@tanstack/react-start";
 import { AuthGate } from "@/components/AuthGate";
@@ -201,7 +202,7 @@ function dispararNotificacaoNativa(titulo: string, corpo: string) {
   }
 }
 
-type TabType = "hoje" | "questoes" | "erros" | "cronograma" | "simulado" | "desempenho";
+type TabType = "hoje" | "questoes" | "erros" | "cronograma" | "simulado" | "desempenho" | "turbo";
 
 function Index() {
   const [tab, setTab] = useState<TabType>("hoje");
@@ -432,6 +433,7 @@ function Index() {
                 ["cronograma", "Cronograma", Calendar],
                 ["simulado", "Simulado Oficial", Award],
                 ["desempenho", "Evolução", BarChart3],
+                ["turbo", "Turbo", Sparkles],
               ] as const
             ).map(([k, l, Icon]) => (
               <Button
@@ -517,6 +519,8 @@ function Index() {
 
               {tab === "simulado" && <Simulado />}
 
+              {tab === "turbo" && <Turbo stats={stats} ofensiva={ofensiva.dias} />}
+
               {tab === "desempenho" && <Desempenho stats={stats} concurso={perfil.concurso} onEstudar={estudar} />}
             </>
           )}
@@ -536,6 +540,7 @@ function Index() {
             ["cronograma", "Plano", Calendar],
             ["simulado", "Simulado", Award],
             ["desempenho", "Evolução", BarChart3],
+            ["turbo", "Turbo", Sparkles],
           ] as const
         ).map(([k, l, Icon]) => {
           const ativo = tab === k;
