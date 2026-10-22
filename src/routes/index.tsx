@@ -449,6 +449,9 @@ function Index() {
       <PopoloMascot
         acertosSeguidos={acertosSeguidos}
         errosPendentes={errosPendentes}
+        stats={stats}
+        dataProva={perfil.dataProva}
+        cargoDesejado={perfil.cargo}
         modoSimulado={tab === "simulado"}
         onEstudarMateria={(m) => estudar(m, "")}
         onAbrirErros={() => {
