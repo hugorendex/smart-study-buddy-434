@@ -50,6 +50,13 @@
       "when": 1792629692629,
       "tag": "0007_seed_banco_completo_todas_materias",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792630457138,
+      "tag": "0008_authorized_emails",
+      "breakpoints": true
     }
   ]
 }
