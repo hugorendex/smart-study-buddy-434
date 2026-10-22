@@ -82,11 +82,11 @@ function Index() {
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors">
       <AccessibilityBar />
-      <header className="bg-hero text-primary-foreground">
+      <header className="bg-hero text-white">
         <div className="mx-auto max-w-4xl px-4 pb-8 pt-8">
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">Sua aprovação começa aqui</p>
-          <h1 className="mt-1 text-3xl sm:text-4xl">Portal do Concurseiro</h1>
-          <p className="mt-2 max-w-lg opacity-80">Questões, simulados e cronograma para concursos públicos</p>
+          <h1 className="mt-1 text-3xl sm:text-4xl font-bold text-white">Portal do Concurseiro</h1>
+          <p className="mt-2 max-w-lg text-white/80">Questões, simulados e cronograma para concursos públicos</p>
           <nav className="mt-6 flex gap-2 overflow-x-auto">
             {(
               [
@@ -100,7 +100,7 @@ function Index() {
                 key={k}
                 onClick={() => setTab(k)}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  tab === k ? "bg-accent text-accent-foreground" : "bg-primary-foreground/10 hover:bg-primary-foreground/20"
+                  tab === k ? "bg-accent text-accent-foreground shadow-sm" : "bg-white/10 text-white hover:bg-white/20"
                 }`}
               >
                 {l}
