@@ -112,3 +112,33 @@
 @utility bg-hero {
   background-image: var(--gradient-hero);
 }
+
+
+.dark {
+  --background: oklch(0.14 0.02 255);
+  --foreground: oklch(0.96 0.01 85);
+  --card: oklch(0.18 0.025 255);
+  --card-foreground: oklch(0.96 0.01 85);
+  --popover: oklch(0.18 0.025 255);
+  --popover-foreground: oklch(0.96 0.01 85);
+  --primary: oklch(0.65 0.14 250);
+  --primary-foreground: oklch(0.12 0.03 255);
+  --secondary: oklch(0.24 0.03 255);
+  --secondary-foreground: oklch(0.95 0.01 85);
+  --muted: oklch(0.22 0.025 255);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.78 0.14 80);
+  --accent-foreground: oklch(0.15 0.04 255);
+  --border: oklch(0.28 0.03 255);
+  --input: oklch(0.28 0.03 255);
+  --ring: oklch(0.78 0.14 80);
+  --gradient-hero: linear-gradient(135deg, oklch(0.16 0.04 255), oklch(0.22 0.05 250));
+}
+
+html.high-contrast {
+  filter: contrast(125%);
+}
+
+html.high-contrast.dark {
+  filter: contrast(135%);
+}
