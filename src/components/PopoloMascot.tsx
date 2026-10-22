@@ -14,6 +14,8 @@ export type PopoloProps = {
   stats?: StatsData;
   dataProva?: string;
   cargoDesejado?: string;
+  ofensiva?: { dias: number };
+  estudosHoje?: { resolvidas: number; certas: number };
   onEstudarMateria?: (materia: string) => void;
   onAbrirErros?: () => void;
 };
@@ -51,6 +53,8 @@ export function PopoloMascot({
   stats = {},
   dataProva,
   cargoDesejado,
+  ofensiva,
+  estudosHoje,
   onEstudarMateria,
   onAbrirErros,
 }: PopoloProps) {
@@ -269,6 +273,22 @@ export function PopoloMascot({
     return "Para maximizar sua nota de corte, concentre seus estudos em Língua Portuguesa e Direito Penal, que são as matérias com mais peso e questões na prova!";
   }, [stats, errosPendentes]);
 
+  // Gera incentivo de ofensiva e desempenho diário
+  const gerarDicaOfensivaEHoje = useCallback(() => {
+    const dias = ofensiva?.dias ?? 0;
+    const resolvidas = estudosHoje?.resolvidas ?? 0;
+    const certas = estudosHoje?.certas ?? 0;
+    const taxa = resolvidas > 0 ? Math.round((certas / resolvidas) * 100) : 0;
+
+    if (resolvidas > 0) {
+      return `Hoje você já resolveu ${resolvidas} questões com ${taxa}% de acertos! E sua ofensiva está em ${dias} ${dias === 1 ? "dia" : "dias"} seguidos. Continue com foco total!`;
+    }
+    if (dias > 0) {
+      return `Você está com ${dias} ${dias === 1 ? "dia" : "dias"} de ofensiva ativa! Resolva seu primeiro bloco de questões de hoje para não deixar a chama apagar!`;
+    }
+    return "Comece sua ofensiva hoje mesmo! Pratique um bloco rápido de questões e construa sua rotina de aprovação.";
+  }, [ofensiva?.dias, estudosHoje?.resolvidas, estudosHoje?.certas]);
+
   // Contagem regressiva de dias para a prova do concurso
   const gerarDicaContagemDias = useCallback(() => {
     if (!dataProva) {
@@ -299,7 +319,7 @@ export function PopoloMascot({
       return;
     }
 
-    const passo = interacaoIndex % 5;
+    const passo = interacaoIndex % 6;
     setInteracaoIndex((prev) => prev + 1);
 
     // 1º passo: toca a voz real oficial gravada ("Oi! Eu sou o Popólo!")
@@ -308,27 +328,33 @@ export function PopoloMascot({
       return;
     }
 
-    // 2º passo: foco nas matérias de menor desempenho / erros pendentes
+    // 2º passo: ofensiva diária e ritmo de estudos de hoje
     if (passo === 1) {
+      falarTexto(gerarDicaOfensivaEHoje(), "comemorando");
+      return;
+    }
+
+    // 3º passo: foco nas matérias de menor desempenho / erros pendentes
+    if (passo === 2) {
       falarTexto(gerarDicaMateria(), "pensativo");
       return;
     }
 
-    // 3º passo: contagem de dias para a prova do concurso
-    if (passo === 2) {
+    // 4º passo: contagem de dias para a prova do concurso
+    if (passo === 3) {
       falarTexto(gerarDicaContagemDias(), "atento");
       return;
     }
 
-    // 4º passo: dica tática de banca examinadora e concurso policial
-    if (passo === 3) {
+    // 5º passo: dica tática de banca examinadora e concurso policial
+    if (passo === 4) {
       const dicaAleatoria = DICAS_TATICA_CONCURSO[Math.floor(Math.random() * DICAS_TATICA_CONCURSO.length)];
       falarTexto(dicaAleatoria, "feliz");
       return;
     }
 
-    // 5º passo: incentivo de foco e hidratação
-    if (passo === 4) {
+    // 6º passo: incentivo de foco e hidratação
+    if (passo === 5) {
       const minutos = Math.floor(segundosEstudo / 60);
       if (minutos >= 30) {
         falarTexto(`Você já está focado há ${minutos} minutos! Lembre-se de beber água e manter a postura firme. A aprovação é construída bloco a bloco!`, "feliz");

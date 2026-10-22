@@ -84,6 +84,75 @@ export const MATERIAS = [
   "Medicina Legal",
 ];
 
+export const MATERIAS_POR_CONCURSO: Record<string, string[]> = {
+  "PC-AP": MATERIAS,
+  "PF": [
+    "Língua Portuguesa",
+    "Informática",
+    "Contabilidade e Análise Financeira",
+    "Raciocínio Lógico",
+    "Estatística e Análise de Dados",
+    "Direito Constitucional",
+    "Direito Administrativo",
+    "Direito Penal",
+    "Direito Processual Penal",
+    "Legislação Penal Especial",
+    "Direitos Humanos",
+  ],
+  "PRF": [
+    "Língua Portuguesa",
+    "Raciocínio Lógico",
+    "Informática",
+    "Direito Constitucional",
+    "Direito Administrativo",
+    "Direito Penal",
+    "Direito Processual Penal",
+    "Legislação Penal Especial",
+    "Direitos Humanos",
+  ],
+  "RECEITA": [
+    "Língua Portuguesa",
+    "Raciocínio Lógico",
+    "Estatística e Análise de Dados",
+    "Contabilidade e Análise Financeira",
+    "Direito Constitucional",
+    "Direito Administrativo",
+    "Direito Tributário e Legislação Complementar",
+  ],
+  "INSS": [
+    "Língua Portuguesa",
+    "Raciocínio Lógico",
+    "Informática",
+    "Direito Constitucional",
+    "Direito Administrativo",
+  ],
+  "TJ-AP": [
+    "Língua Portuguesa",
+    "Raciocínio Lógico",
+    "Informática",
+    "Direito Constitucional",
+    "Direito Administrativo",
+    "Direito Processual Penal",
+    "História e Geografia do Amapá",
+    "Legislação Estadual (PC-AP)",
+  ],
+  "CNU": [
+    "Língua Portuguesa",
+    "Raciocínio Lógico",
+    "Estatística e Análise de Dados",
+    "Informática",
+    "Direito Constitucional",
+    "Direito Administrativo",
+    "Direitos Humanos",
+  ],
+  "GERAL": MATERIAS,
+};
+
+export function obterMateriasPorConcurso(concurso?: string): string[] {
+  if (!concurso) return MATERIAS;
+  return MATERIAS_POR_CONCURSO[concurso] || MATERIAS;
+}
+
 export type Stats = Record<string, { certas: number; total: number }>;
 
 export type QuestaoErro = {
@@ -514,6 +583,7 @@ function Index() {
                 <Questoes
                   studyTopic={studyTopic}
                   stats={stats}
+                  concurso={perfil.concurso}
                   onIrPara={setTab}
                   onResposta={handleResposta}
                 />
@@ -522,12 +592,12 @@ function Index() {
               {tab === "erros" && <CadernoErros erros={erros} setErros={setErros} onEstudar={estudar} />}
 
               <div hidden={tab !== "cronograma"}>
-                <Cronograma onEstudar={estudar} cargoPadrao={perfil.cargo} horasPadrao={perfil.horasDia} />
+                <Cronograma onEstudar={estudar} cargoPadrao={perfil.cargo} horasPadrao={perfil.horasDia} concurso={perfil.concurso} />
               </div>
 
               {tab === "simulado" && <Simulado />}
 
-              {tab === "desempenho" && <Desempenho stats={stats} onEstudar={estudar} />}
+              {tab === "desempenho" && <Desempenho stats={stats} concurso={perfil.concurso} onEstudar={estudar} />}
             </>
           )}
         </AuthGate>
@@ -580,6 +650,8 @@ function Index() {
         stats={stats}
         dataProva={perfil.dataProva}
         cargoDesejado={perfil.cargo}
+        ofensiva={ofensiva}
+        estudosHoje={estudosHoje}
         modoSimulado={tab === "simulado"}
         onEstudarMateria={(m) => estudar(m, "", true)}
         onAbrirErros={() => {
@@ -1115,17 +1187,26 @@ function AudioExplicacao({ texto }: { texto: string }) {
 function Questoes({
   studyTopic,
   stats,
+  concurso,
   onIrPara,
   onResposta,
 }: {
   studyTopic: { materia: string; topico: string; id: number; autoStart?: boolean } | undefined;
   stats: Stats;
+  concurso?: string;
   onIrPara: (t: TabType) => void;
   onResposta: (acertou: boolean) => void;
 }) {
   const take = useServerFn(getQuestions);
   const refill = useServerFn(refillBank);
-  const [materia, setMateria] = useState<string>(MATERIAS[0] ?? "Língua Portuguesa");
+  const materiasDisponiveis = useMemo(() => obterMateriasPorConcurso(concurso), [concurso]);
+  const [materia, setMateria] = useState<string>(() => materiasDisponiveis[0] ?? "Língua Portuguesa");
+
+  useEffect(() => {
+    if (!materiasDisponiveis.includes(materia) && materiasDisponiveis.length > 0) {
+      setMateria(materiasDisponiveis[0]);
+    }
+  }, [materiasDisponiveis, materia]);
   const [topico, setTopico] = useState("");
   const [dif, setDif] = useState("média");
   const [qtd, setQtd] = useState(5);
@@ -1329,7 +1410,7 @@ function Questoes({
             <label className="space-y-1 sm:col-span-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Matéria</span>
               <select className={input} value={materia} onChange={(e) => setMateria(e.target.value)}>
-                {MATERIAS.map((m) => (
+                {materiasDisponiveis.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>
@@ -1530,10 +1611,12 @@ function Cronograma({
   onEstudar,
   cargoPadrao,
   horasPadrao,
+  concurso,
 }: {
   onEstudar: (materia: string, topico: string) => void;
   cargoPadrao?: string;
   horasPadrao?: number;
+  concurso?: string;
 }) {
   const gen = useServerFn(generateSchedule);
   const [cargo, setCargo] = useState(cargoPadrao || "Agente de Polícia");
@@ -1552,7 +1635,7 @@ function Cronograma({
     setErr("");
     setMsgRedistribuido("");
     try {
-      const p = await gen({ data: { cargo, horasDia: horas, diasSemana: dias, semanas, fracas, materias: MATERIAS } });
+      const p = await gen({ data: { cargo, horasDia: horas, diasSemana: dias, semanas, fracas, materias: obterMateriasPorConcurso(concurso) } });
       setPlano(p);
       setFeitos({});
     } catch (e: any) {
@@ -1655,7 +1738,7 @@ function Cronograma({
               Disciplinas com maior dificuldade (receberão mais horas)
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {MATERIAS.map((m) => {
+              {materiasExibidas.map((m) => {
                 const on = fracas.includes(m);
                 return (
                   <button
@@ -1782,7 +1865,8 @@ function Cronograma({
 // ----------------------------------------------------
 // DASHBOARD DE PROGRESSO VISUAL
 // ----------------------------------------------------
-function Desempenho({ stats, onEstudar }: { stats: Stats; onEstudar: (m: string, t: string) => void }) {
+function Desempenho({ stats, concurso, onEstudar }: { stats: Stats; concurso?: string; onEstudar: (m: string, t: string) => void }) {
+  const materiasExibidas = useMemo(() => obterMateriasPorConcurso(concurso), [concurso]);
   const entries = Object.entries(stats);
 
   const totalQuestoes = entries.reduce((acc, [, s]) => acc + s.total, 0);
