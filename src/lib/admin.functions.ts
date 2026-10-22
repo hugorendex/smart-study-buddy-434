@@ -91,7 +91,7 @@ export const checkUserAccess = createServerFn({ method: "POST" })
 
     // 2. Checa tabela authorized_emails
     try {
-      const { data: authRow } = await supabaseAdmin
+      const { data: authRow } = await (supabaseAdmin as any)
         .from("authorized_emails" as any)
         .select("status")
         .ilike("email", email)
@@ -107,7 +107,7 @@ export const checkUserAccess = createServerFn({ method: "POST" })
 
     // 3. Checa tabela user_plans
     try {
-      const { data: plan } = await supabaseAdmin
+      const { data: plan } = await (supabaseAdmin as any)
         .from("user_plans")
         .select("plan, premium_until")
         .eq("user_id", userId)
@@ -149,13 +149,13 @@ export const getAdminOverview = createServerFn({ method: "POST" })
     let authorizedEmailsList: AuthorizedEmail[] = [];
     const authEmailMap = new Map<string, string>();
     try {
-      const { data: aList } = await supabaseAdmin
+      const { data: aList } = await (supabaseAdmin as any)
         .from("authorized_emails" as any)
         .select("id, email, status, created_at")
         .order("created_at", { ascending: false });
       if (aList) {
-        authorizedEmailsList = aList as AuthorizedEmail[];
-        for (const item of aList) {
+        authorizedEmailsList = aList as unknown as AuthorizedEmail[];
+        for (const item of aList as any[]) {
           authEmailMap.set((item.email ?? "").toLowerCase().trim(), item.status);
         }
       }
@@ -163,7 +163,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
       // table might not exist yet
     }
 
-    const { data: adminRoles } = await supabaseAdmin
+    const { data: adminRoles } = await (supabaseAdmin as any)
       .from("user_roles")
       .select("user_id, role")
       .eq("role", "admin");

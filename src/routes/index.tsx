@@ -6,13 +6,6 @@ import {
   CONCURSOS_DISPONIVEIS,
   calcularDiasRestantes,
 } from "@/lib/concursos";
-export {
-  MATERIAS,
-  MATERIAS_POR_CONCURSO,
-  obterMateriasPorConcurso,
-  CONCURSOS_DISPONIVEIS,
-  calcularDiasRestantes,
-} from "@/lib/concursos";
 import { safeStorage, safeSession } from "@/lib/safe-storage";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
@@ -1561,6 +1554,7 @@ function Cronograma({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [msgRedistribuido, setMsgRedistribuido] = useState("");
+  const materiasExibidas = useMemo(() => obterMateriasPorConcurso(concurso), [concurso]);
 
   async function gerar() {
     setLoading(true);

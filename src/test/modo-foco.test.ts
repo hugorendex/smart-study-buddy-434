@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { CONCURSOS_DISPONIVEIS, type OfensivaData, type EstudosHojeData } from "@/routes/index";
+import { CONCURSOS_DISPONIVEIS } from "@/lib/concursos";
+import type { OfensivaData, EstudosHojeData } from "@/routes/index";
 
 describe("Modo Foco - Lógica e Regras de Negócio", () => {
   it("contém todos os concursos cadastrados com badges e cargos padrão", () => {
     expect(CONCURSOS_DISPONIVEIS.length).toBeGreaterThanOrEqual(8);
-    const pcap = CONCURSOS_DISPONIVEIS.find((c) => c.id === "PC-AP");
+    const pcap = CONCURSOS_DISPONIVEIS.find((c: any) => c.id === "PC-AP");
     expect(pcap).toBeDefined();
     expect(pcap?.cargoPadrao).toBe("Investigador de Polícia");
 
-    const pf = CONCURSOS_DISPONIVEIS.find((c) => c.id === "PF");
+    const pf = CONCURSOS_DISPONIVEIS.find((c: any) => c.id === "PF");
     expect(pf?.cargoPadrao).toBe("Agente de Polícia Federal");
   });
 
@@ -78,7 +79,7 @@ describe("Modo Foco - Lógica e Regras de Negócio", () => {
 
 describe("Filtragem dinâmica de matérias por concurso", () => {
   it("retorna matérias específicas para cada concurso selecionado", async () => {
-    const { obterMateriasPorConcurso, MATERIAS } = await import("@/routes/index");
+    const { obterMateriasPorConcurso, MATERIAS } = await import("@/lib/concursos");
 
     const pcap = obterMateriasPorConcurso("PC-AP");
     expect(pcap).toEqual(MATERIAS);
